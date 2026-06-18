@@ -801,7 +801,7 @@ function getHaversineDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-async function optimizeRouteByProximity(localidad) {
+async function optimizeRouteByProximity(localidad, silent = false) {
     addSystemLog(`⚡ Iniciando optimización de ruta para ${localidad}...`);
     
     // Punto de partida inicial: Lavaseco Orquídeas base (Usaquén)
@@ -818,7 +818,7 @@ async function optimizeRouteByProximity(localidad) {
     if (navigator.geolocation) {
         try {
             const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000, enableHighAccuracy: true });
+                navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000, enableHighAccuracy: true });
             });
             startLat = position.coords.latitude;
             startLng = position.coords.longitude;
@@ -831,17 +831,30 @@ async function optimizeRouteByProximity(localidad) {
     // Filtrar los pedidos no completados en la localidad activa
     let pendingLoc = deliveries.filter(d => d.localidad === localidad && d.status !== 'ENTREGADO');
     if (pendingLoc.length <= 1) {
-        addSystemLog("ℹ️ No hay suficientes pedidos pendientes para optimizar.");
-        alert("ℹ️ No hay suficientes pedidos pendientes para optimizar la ruta.");
+        if (!silent) {
+            addSystemLog("ℹ️ No hay suficientes pedidos pendientes para optimizar.");
+            alert("ℹ️ No hay suficientes pedidos pendientes para optimizar la ruta.");
+        }
         return;
     }
     
-    // Algoritmo Nearest Neighbor (Vecino más cercano)
-    let unvisited = [...pendingLoc];
+    // Encontrar si hay un pedido en ruta
+    let activeRouteDeliv = pendingLoc.find(d => d.status === 'EN_RUTA');
+    let unvisited = pendingLoc.filter(d => d.status !== 'EN_RUTA');
     let orderedRoute = [];
+    
     let currentLat = startLat;
     let currentLng = startLng;
     
+    // Si hay un pedido activo "EN_RUTA", debe ser la primera parada
+    if (activeRouteDeliv) {
+        orderedRoute.push(activeRouteDeliv);
+        currentLat = activeRouteDeliv.latitude !== undefined && activeRouteDeliv.latitude !== null ? activeRouteDeliv.latitude : startLat;
+        currentLng = activeRouteDeliv.longitude !== undefined && activeRouteDeliv.longitude !== null ? activeRouteDeliv.longitude : startLng;
+        addSystemLog(`🏍️ Priorizando despacho activo para ${activeRouteDeliv.client_name} como primera parada.`);
+    }
+    
+    // Algoritmo Nearest Neighbor (Vecino más cercano) para los demás
     while (unvisited.length > 0) {
         let nearestIdx = -1;
         let minDistance = Infinity;
@@ -898,9 +911,13 @@ async function optimizeRouteByProximity(localidad) {
     
     await saveDeliveries();
     addSystemLog(`✅ Ruta de ${localidad} optimizada con éxito.`);
+    
     renderLocalidades();
     renderContent();
-    alert("⚡ ¡Ruta optimizada por proximidad con éxito!");
+    
+    if (!silent) {
+        alert("⚡ ¡Ruta optimizada por proximidad con éxito!");
+    }
 }
 
 // 4. Acciones de Entregas
