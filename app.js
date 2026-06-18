@@ -813,7 +813,7 @@ async function saveNewOrder() {
 // Vista de Domicilios
 function renderDeliveriesView(container) {
     const filtered = deliveries
-        .filter(d => d.localidad === currentLocalidad)
+        .filter(d => d.localidad === currentLocalidad && d.order_date === currentDate)
         .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
         
     const activeRoute = filtered.filter(d => d.status === "EN_RUTA");
@@ -828,7 +828,7 @@ function renderDeliveriesView(container) {
             </div>
             <div class="wallet-item">
                 <div class="wallet-label">Comisión Hoy</div>
-                <div class="wallet-val highlight">$${(deliveries.filter(d => d.status === "ENTREGADO").length * 8000).toLocaleString()}</div>
+                <div class="wallet-val highlight">$${(deliveries.filter(d => d.status === "ENTREGADO" && d.order_date === currentShift.shift_date).length * 8000).toLocaleString()}</div>
             </div>
         </div>
     `;
@@ -1001,7 +1001,7 @@ function renderLifoView(container) {
 
     const itemsContainer = document.getElementById("maleta-items-container");
     const sorted = [...deliveries]
-        .filter(d => d.status !== "ENTREGADO")
+        .filter(d => d.status !== "ENTREGADO" && d.order_date === currentDate)
         .sort((a, b) => {
             // Priorizar la localidad activa actual (currentLocalidad) para que vaya arriba (se entrega primero)
             const aActive = a.localidad === currentLocalidad ? 0 : 1;
@@ -1180,8 +1180,8 @@ async function optimizeRouteByProximity(localidad, silent = false) {
         }
     }
     
-    // Filtrar los pedidos no completados en la localidad activa
-    let pendingLoc = deliveries.filter(d => d.localidad === localidad && d.status !== 'ENTREGADO');
+    // Filtrar los pedidos no completados en la localidad activa para la fecha actual
+    let pendingLoc = deliveries.filter(d => d.localidad === localidad && d.status !== 'ENTREGADO' && d.order_date === currentDate);
     if (pendingLoc.length <= 1) {
         if (!silent) {
             addSystemLog("ℹ️ No hay suficientes pedidos pendientes para optimizar.");
@@ -1243,7 +1243,7 @@ async function optimizeRouteByProximity(localidad, silent = false) {
     });
     
     // Asignar orden final a los completados para que queden abajo
-    let completedLoc = deliveries.filter(d => d.localidad === localidad && d.status === 'ENTREGADO');
+    let completedLoc = deliveries.filter(d => d.localidad === localidad && d.status === 'ENTREGADO' && d.order_date === currentDate);
     completedLoc.forEach((d, idx) => {
         d.sort_order = (orderedRoute.length + idx) * 10;
     });
@@ -1571,7 +1571,7 @@ async function confirmDelivery() {
 // 6. Gestión Financiera
 function recalculateShiftCash() {
     const cashCollected = deliveries
-        .filter(d => d.status === "ENTREGADO" && d.pay_method === "Efectivo")
+        .filter(d => d.status === "ENTREGADO" && d.pay_method === "Efectivo" && d.order_date === currentShift.shift_date)
         .reduce((sum, d) => sum + d.amount, 0);
         
     currentShift.collected_cash = cashCollected;
@@ -1846,11 +1846,14 @@ function renderLocalidades() {
     if (!selector) return;
     selector.innerHTML = "";
     
-    const targetDeliveries = deliveries.length > 0 ? deliveries : DEFAULT_DELIVERIES;
-    const localidades = [...new Set(targetDeliveries.map(d => d.localidad))];
+    const allDeliveries = deliveries.length > 0 ? deliveries : DEFAULT_DELIVERIES;
+    const localidades = [...new Set(allDeliveries.map(d => d.localidad))];
+    if (localidades.length === 0) {
+        localidades.push("Usaquén");
+    }
     
     localidades.forEach((loc) => {
-        const count = targetDeliveries.filter(d => d.localidad === loc && d.status !== 'ENTREGADO').length;
+        const count = allDeliveries.filter(d => d.localidad === loc && d.order_date === currentDate && d.status !== 'ENTREGADO').length;
         const active = loc === currentLocalidad ? 'active' : '';
         const tab = document.createElement("div");
         tab.className = `tab ${active}`;
