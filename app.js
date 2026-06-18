@@ -478,6 +478,17 @@ async function initApp() {
 
     const activeTheme = localStorage.getItem("app-theme") || "theme-dark";
     setTheme(activeTheme);
+
+    // Sincronizar fecha inicial seleccionada con la fecha del turno actual
+    if (currentShift && currentShift.shift_date) {
+        currentDate = currentShift.shift_date;
+        const dateParts = currentDate.split('-');
+        if (dateParts.length === 3) {
+            viewYear = parseInt(dateParts[0]);
+            viewMonth = parseInt(dateParts[1]) - 1;
+        }
+    }
+    
     recalculateShiftCash();
 
     renderTabs();
@@ -580,13 +591,19 @@ function renderCalendarStrip() {
         
         const count = deliveries.filter(item => item.order_date === dateStr).length;
         const active = dateStr === currentDate ? 'active' : '';
+        const isToday = dateStr === currentShift.shift_date;
+        const todayClass = isToday ? 'today' : '';
+        const isDiffActive = (dateStr === currentDate && !isToday);
+        const diffClass = isDiffActive ? 'different-day' : '';
         
         const dayEl = document.createElement("div");
-        dayEl.className = `calendar-day ${active}`;
+        dayEl.className = `calendar-day ${active} ${todayClass} ${diffClass}`;
         dayEl.onclick = () => selectDate(dateStr);
         
+        const dayNameText = isToday ? "Hoy" : dayName;
+        
         dayEl.innerHTML = `
-            <span class="calendar-day-name">${dayName}</span>
+            <span class="calendar-day-name">${dayNameText}</span>
             <span class="calendar-day-number">${d}</span>
             ${count > 0 ? `<div class="calendar-dot" title="${count} pedidos"></div>` : ''}
         `;

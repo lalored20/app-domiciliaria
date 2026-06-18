@@ -927,6 +927,30 @@ body.theme-glass .calendar-day.active {
     box-shadow: none;
 }
 
+/* Estilos para el día de turno hoy (no seleccionado) */
+.calendar-day.today:not(.active) {
+    border: 1px dashed var(--primary);
+    box-shadow: inset 0 0 6px rgba(139, 92, 246, 0.15);
+}
+
+body.theme-glass .calendar-day.today:not(.active) {
+    border: 1px dashed var(--primary);
+    background: rgba(255, 46, 147, 0.05);
+}
+
+/* Estilos de realce para cuando se selecciona otra fecha */
+.calendar-day.active.different-day {
+    background: var(--secondary);
+    border-color: var(--secondary);
+    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.4);
+}
+
+body.theme-glass .calendar-day.active.different-day {
+    background: rgba(0, 240, 255, 0.25);
+    border-color: rgba(0, 240, 255, 0.4);
+    box-shadow: 0 4px 12px rgba(0, 240, 255, 0.2);
+}
+
 .calendar-day-name {
     font-size: 8px;
     color: var(--text-muted);
