@@ -654,7 +654,12 @@ function renderLifoView(container) {
     const itemsContainer = document.getElementById("maleta-items-container");
     const sorted = [...deliveries]
         .filter(d => d.status !== "ENTREGADO")
-        .sort((a, b) => a.time_window.localeCompare(b.time_window));
+        .sort((a, b) => {
+            if (a.localidad !== b.localidad) {
+                return a.localidad.localeCompare(b.localidad);
+            }
+            return (a.sort_order || 0) - (b.sort_order || 0);
+        });
 
     if (sorted.length === 0) {
         itemsContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">No hay pedidos para cargar hoy.</div>`;
