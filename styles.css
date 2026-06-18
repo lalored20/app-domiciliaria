@@ -836,3 +836,126 @@ body.theme-glass .modal {
     z-index: 1000;
     pointer-events: none; /* Evita que bloquee document.elementFromPoint */
 }
+
+/* Contenedor del Calendario Mensual */
+.calendar-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 5px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+}
+
+.month-selector {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+}
+
+.month-btn {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    transition: all 0.2s ease;
+}
+
+.month-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.month-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-main);
+    text-transform: capitalize;
+}
+
+/* Selector Horizontal de Calendario */
+.calendar-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 5px;
+    scrollbar-width: none;
+}
+
+.calendar-strip::-webkit-scrollbar {
+    display: none;
+}
+
+.calendar-day {
+    flex: 0 0 54px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 4px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    position: relative;
+}
+
+.calendar-day:hover {
+    border-color: rgba(139, 92, 246, 0.5);
+}
+
+.calendar-day.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--text-main);
+    box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+body.theme-glass .calendar-day.active {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.25);
+    box-shadow: none;
+}
+
+.calendar-day-name {
+    font-size: 8px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.calendar-day.active .calendar-day-name {
+    color: var(--text-main);
+    opacity: 0.9;
+}
+
+.calendar-day-number {
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.calendar-dot {
+    position: absolute;
+    bottom: 3px;
+    width: 4px;
+    height: 4px;
+    background: var(--secondary);
+    border-radius: 50%;
+    box-shadow: 0 0 5px var(--secondary);
+}
+
+.calendar-day.active .calendar-dot {
+    background: var(--text-main);
+    box-shadow: none;
+}
