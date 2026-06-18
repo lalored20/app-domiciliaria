@@ -535,7 +535,7 @@ body.theme-glass .card.active-route {
     border-radius: 16px;
     padding: 15px;
     display: flex;
-    flex-direction: column-reverse;
+    flex-direction: column;
     gap: 10px;
     background: rgba(0,0,0,0.1);
 }
@@ -791,4 +791,48 @@ body.theme-glass .modal {
     border: none;
     font-weight: 700;
     box-shadow: 0 4px 15px var(--success-glow);
+}
+
+/* Estilos Premium para Arrastre (Drag & Drop) */
+.drag-handle {
+    font-size: 14px;
+    color: var(--text-muted);
+    cursor: grab;
+    padding: 3px 6px;
+    border-radius: 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    transition: all 0.2s ease;
+}
+
+.drag-handle:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Estados de Arrastre en la Tarjeta */
+.card.dragging {
+    opacity: 0.4;
+    border: 2px dashed var(--primary);
+    transform: scale(0.97);
+    box-shadow: none;
+}
+
+.card.dragging-touch {
+    opacity: 0.9;
+    background: var(--bg-input);
+    border: 2px solid var(--primary);
+    box-shadow: 0 12px 30px rgba(139, 92, 246, 0.35);
+    transform: scale(1.02);
+    z-index: 1000;
+    pointer-events: none; /* Evita que bloquee document.elementFromPoint */
 }
