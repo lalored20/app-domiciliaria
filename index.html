@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Domiciliaria - Ecosistema Lavaseco Orquídeas</title>
+    
+    <!-- Tipografías de Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- CDN de Dexie.js para Base de Datos IndexedDB Local y Offline -->
+    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    
+    <!-- SDK de Supabase para comunicación en tiempo real y persistencia en la nube -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Enlace a estilos unificados -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-dark">
+
+    <!-- Burbujas decorativas para el efecto translúcido del tema Glassmorphism -->
+    <div class="ambient-bg">
+        <div class="bubble bubble-1"></div>
+        <div class="bubble bubble-2"></div>
+        <div class="bubble bubble-3"></div>
+    </div>
+
+    <!-- Contenedor principal de simulación de dispositivo -->
+    <div class="device-container">
+        
+        <!-- Barra de Estado Móvil Superior -->
+        <div class="status-bar">
+            <span id="device-time">15:18</span>
+            <div class="icons">
+                <span>📶</span>
+                <span>🔋 95%</span>
+            </div>
+        </div>
+
+        <!-- Encabezado Principal -->
+        <header>
+            <div class="header-top">
+                <div class="brand">
+                    <div class="logo-indicator"></div>
+                    <h1>Ruta Diaria</h1>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <!-- Selector Rápido de Tema -->
+                    <button class="theme-switch" id="quick-theme-toggle" onclick="toggleTheme()" title="Cambiar Tema">
+                        🌓
+                    </button>
+                    <span class="date-badge">18 Jun 2026</span>
+                </div>
+            </div>
+
+            <!-- Selector Horizontal de Localidades -->
+            <div class="localidad-selector">
+                <!-- Se llena dinámicamente mediante app.js -->
+            </div>
+        </header>
+
+        <!-- Contenido Dinámico de la Aplicación -->
+        <div class="content" id="main-app-content">
+            <!-- Se carga dinámicamente a través de app.js (Entregas, LIFO, Caja o Config) -->
+        </div>
+
+        <!-- Barra de Navegación Inferior -->
+        <div class="nav-bar">
+            <!-- Se renderiza dinámicamente mediante app.js -->
+        </div>
+
+        <!-- Modal de Confirmación de Entrega (Con Canvas, Previsualizaciones y Láser QR) -->
+        <div class="modal" id="confirm-modal">
+            <div class="modal-content">
+                <h2 id="modal-client-name">Confirmar Entrega</h2>
+                <p style="font-size: 13px; color: var(--text-muted); text-align: center; margin-bottom: 2px;">
+                    Monto a reportar: <strong style="color: var(--text-main)" id="modal-amount">$0</strong>
+                </p>
+
+                <!-- Escaneo de Prenda QR -->
+                <div class="input-group">
+                    <label>Escanear Prenda/QR (Validación)</label>
+                    <button class="btn btn-maps" id="qr-scan-btn" style="border-style: dashed; padding: 10px; font-weight:600;" onclick="startQRScan()">
+                        📷 Iniciar Scanner de Prenda
+                    </button>
+                    <!-- Scanner animado -->
+                    <div class="qr-scanner-view" id="qr-scanner-screen">
+                        <div class="qr-scanner-laser"></div>
+                        <div class="qr-scanner-rect"></div>
+                    </div>
+                </div>
+
+                <!-- Foto de Evidencia -->
+                <div class="input-group">
+                    <label>Evidencia de Entrega (Foto)</label>
+                    <div class="photo-placeholder" id="photo-upload-placeholder" onclick="takeDeliveryPhotoSim()">
+                        <span style="font-size:20px;">📷</span>
+                        <span id="photo-status" style="font-weight:600;">Tomar foto obligatoria</span>
+                    </div>
+                    <!-- Imagen de previsualización -->
+                    <img id="photo-preview-box" class="photo-preview-img" alt="Entrega simulada">
+                </div>
+
+                <!-- Conteo Físico de Prendas -->
+                <div class="input-group">
+                    <label>Control de Prendas Físicas (Conteo)</label>
+                    <div style="display:flex; justify-content:center; align-items:center; gap:20px; background:var(--bg-input); padding:8px 12px; border-radius:14px; border:1px solid var(--border);">
+                        <button class="btn" onclick="adjustItemCount(-1)" style="width:38px; height:38px; border-radius:50%; padding:0; display:flex; align-items:center; justify-content:center; font-size:18px; background:var(--bg-card); font-weight:bold; border-color:var(--border);">-</button>
+                        <span id="modal-items-count-display" style="font-size:20px; font-weight:700; min-width:40px; text-align:center;">1</span>
+                        <button class="btn" onclick="adjustItemCount(1)" style="width:38px; height:38px; border-radius:50%; padding:0; display:flex; align-items:center; justify-content:center; font-size:18px; background:var(--bg-card); font-weight:bold; border-color:var(--border);">+</button>
+                    </div>
+                    <span id="modal-expected-items-info" style="font-size:11px; color:var(--text-muted); text-align:center; display:block; margin-top:2px;">Esperadas según chatbot: 1 prenda</span>
+                </div>
+
+                <!-- Firma Digital Canvas -->
+                <div class="input-group">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <label>Firma del Cliente (Dibuja abajo)</label>
+                        <span style="font-size:11px; color:var(--primary); cursor:pointer; font-weight:bold;" onclick="clearSignatureCanvas()">[Borrar]</span>
+                    </div>
+                    <canvas id="signature-pad" class="signature-canvas"></canvas>
+                </div>
+
+                <!-- Botones de Acción del Modal -->
+                <div class="modal-buttons">
+                    <button class="btn btn-cancel" onclick="closeConfirmModal()">Cancelar</button>
+                    <button class="btn btn-confirm" id="btn-complete-delivery" onclick="confirmDelivery()" style="opacity: 0.4; pointer-events: none; background: #666;">Completar</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Enlace a la lógica core de la aplicación -->
+    <script src="app.js"></script>
+    <script>
+        // Actualizar hora del dispositivo dinámicamente
+        function updateTime() {
+            const now = new Date();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const timeEl = document.getElementById('device-time');
+            if (timeEl) timeEl.textContent = `${hours}:${minutes}`;
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // Alternador rápido de temas
+        function toggleTheme() {
+            const isGlass = document.body.classList.contains("theme-glass");
+            const newTheme = isGlass ? "theme-dark" : "theme-glass";
+            changeThemeMode(newTheme);
+        }
+    </script>
+</body>
+</html>
