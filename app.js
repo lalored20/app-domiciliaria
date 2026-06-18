@@ -33,7 +33,10 @@ const DEFAULT_DELIVERIES = [
         evidence_photo: null,
         signature_drawn: false,
         order_date: "2026-06-18",
-        sync_pending: false
+        sync_pending: false,
+        sort_order: 10,
+        latitude: 4.7058,
+        longitude: -74.0423
     },
     {
         id: "d2",
@@ -51,7 +54,10 @@ const DEFAULT_DELIVERIES = [
         evidence_photo: null,
         signature_drawn: false,
         order_date: "2026-06-18",
-        sync_pending: false
+        sync_pending: false,
+        sort_order: 20,
+        latitude: 4.6978,
+        longitude: -74.0318
     },
     {
         id: "d3",
@@ -69,7 +75,10 @@ const DEFAULT_DELIVERIES = [
         evidence_photo: null,
         signature_drawn: false,
         order_date: "2026-06-18",
-        sync_pending: false
+        sync_pending: false,
+        sort_order: 30,
+        latitude: 4.7189,
+        longitude: -74.0302
     },
     {
         id: "d4",
@@ -87,7 +96,10 @@ const DEFAULT_DELIVERIES = [
         evidence_photo: null,
         signature_drawn: false,
         order_date: "2026-06-18",
-        sync_pending: false
+        sync_pending: false,
+        sort_order: 10,
+        latitude: 4.7352,
+        longitude: -74.0901
     },
     {
         id: "d5",
@@ -105,7 +117,10 @@ const DEFAULT_DELIVERIES = [
         evidence_photo: null,
         signature_drawn: false,
         order_date: "2026-06-18",
-        sync_pending: false
+        sync_pending: false,
+        sort_order: 20,
+        latitude: 4.7178,
+        longitude: -74.0954
     }
 ];
 
@@ -183,21 +198,30 @@ async function initApp() {
                 deliveries = await db.deliveries.toArray();
                 
                 // MIGRACIÓN AUTOMÁTICA DE DATOS:
-                // Si el usuario recargó y tenía datos anteriores sin expected_items (daba undefined en la UI),
+                // Si el usuario recargó y tenía datos anteriores sin expected_items, sort_order o coordenadas,
                 // actualizamos en caliente usando los datos predeterminados.
                 let dataMigrated = false;
-                deliveries.forEach(d => {
+                deliveries.forEach((d, idx) => {
+                    const def = DEFAULT_DELIVERIES.find(def => def.id === d.id);
                     if (d.expected_items === undefined || d.expected_items === null) {
-                        const def = DEFAULT_DELIVERIES.find(def => def.id === d.id);
                         d.expected_items = def ? def.expected_items : 1;
                         d.collected_items = def ? def.expected_items : 1;
+                        dataMigrated = true;
+                    }
+                    if (d.sort_order === undefined || d.sort_order === null) {
+                        d.sort_order = def ? def.sort_order : idx * 10;
+                        dataMigrated = true;
+                    }
+                    if (d.latitude === undefined || d.latitude === null) {
+                        d.latitude = def ? def.latitude : null;
+                        d.longitude = def ? def.longitude : null;
                         dataMigrated = true;
                     }
                 });
 
                 if (dataMigrated) {
                     await saveDeliveries();
-                    addSystemLog("🔧 Migración: Corregidos registros antiguos huérfanos.");
+                    addSystemLog("🔧 Migración: Corregidos registros antiguos con sort_order y geolocalización.");
                 }
 
                 const storedShift = await db.shift.get("shift_today");
@@ -239,11 +263,20 @@ function loadLocalStorageFallback() {
 
     // Migración para fallback de LocalStorage
     let migrated = false;
-    deliveries.forEach(d => {
+    deliveries.forEach((d, idx) => {
+        const def = DEFAULT_DELIVERIES.find(def => def.id === d.id);
         if (d.expected_items === undefined || d.expected_items === null) {
-            const def = DEFAULT_DELIVERIES.find(def => def.id === d.id);
             d.expected_items = def ? def.expected_items : 1;
             d.collected_items = def ? def.expected_items : 1;
+            migrated = true;
+        }
+        if (d.sort_order === undefined || d.sort_order === null) {
+            d.sort_order = def ? def.sort_order : idx * 10;
+            migrated = true;
+        }
+        if (d.latitude === undefined || d.latitude === null) {
+            d.latitude = def ? def.latitude : null;
+            d.longitude = def ? def.longitude : null;
             migrated = true;
         }
     });
