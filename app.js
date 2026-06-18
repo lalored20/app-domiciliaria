@@ -395,6 +395,7 @@ let currentShift = {
     initial_cash: 50000,
     collected_cash: 0,
     expenses: 0,
+    expenses_detail: [],
     status: "ABIERTO",
     shift_date: "2026-06-18",
     sync_pending: false
@@ -465,6 +466,9 @@ async function initApp() {
                 const storedShift = await db.shift.get("shift_today");
                 if (storedShift) {
                     currentShift = storedShift;
+                    if (!currentShift.expenses_detail) {
+                        currentShift.expenses_detail = [];
+                    }
                 }
                 addSystemLog(`📦 Cargados ${deliveries.length} pedidos locales de IndexedDB.`);
             }
@@ -556,6 +560,9 @@ function loadLocalStorageFallback() {
     const cachedShift = localStorage.getItem("shift");
     if (cachedShift) {
         currentShift = JSON.parse(cachedShift);
+        if (!currentShift.expenses_detail) {
+            currentShift.expenses_detail = [];
+        }
     }
     addSystemLog("📦 Cargados datos locales desde LocalStorage Fallback.");
 }
@@ -1055,6 +1062,27 @@ function renderLifoView(container) {
 // Vista de Caja
 function renderCashView(container) {
     const shiftClosed = currentShift.status === "CERRADO";
+    const expensesDetail = currentShift.expenses_detail || [];
+    
+    let expensesListHtml = "";
+    if (expensesDetail.length > 0) {
+        expensesListHtml = `
+            <div class="expenses-list" style="margin-top:15px; background:var(--bg-card); border:1px solid var(--border); border-radius:16px; padding:15px;">
+                <div style="font-weight:600; font-size:13px; color:var(--text-muted); margin-bottom:8px; display:flex; justify-content:space-between; border-bottom:1px solid var(--border); padding-bottom:6px;">
+                    <span>Concepto</span>
+                    <span>Monto</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px; max-height:120px; overflow-y:auto; padding-right:4px;">
+                    ${expensesDetail.map(e => `
+                        <div style="display:flex; justify-content:space-between; font-size:13px;">
+                            <span style="color:var(--text-main); font-weight:500;">${e.description}</span>
+                            <span style="color:var(--danger); font-weight:600;">-$${e.amount.toLocaleString()}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
     
     container.innerHTML = `
         <div class="cash-module">
@@ -1086,16 +1114,22 @@ function renderCashView(container) {
                 <div style="background:rgba(16, 185, 129, 0.15); border:1px solid var(--success); border-radius:16px; padding:15px; text-align:center; color:var(--success); font-weight:600;">
                     🔒 Turno Cerrado Exitosamente. Cuentas conciliadas.
                 </div>
+                ${expensesListHtml}
             ` : `
                 <div class="form-group" style="margin-top:10px;">
-                    <label>Registrar Gasto (Gasolina / Peaje / Viático)</label>
-                    <div style="display:flex; gap:8px;">
-                        <input type="number" id="cash-expense-amount" class="input-text" placeholder="Monto $" style="flex:1;">
-                        <button class="btn btn-confirm" onclick="registerExpense()" style="width:90px; box-shadow:none;">
-                            Añadir
-                        </button>
+                    <label>Registrar Gasto (Concepto y Monto)</label>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <input type="text" id="cash-expense-desc" class="input-text" placeholder="Concepto (ej: Gasolina, Peaje, Viáticos...)" style="width:100%;">
+                        <div style="display:flex; gap:8px;">
+                            <input type="number" id="cash-expense-amount" class="input-text" placeholder="Monto $" style="flex:1;">
+                            <button class="btn btn-confirm" onclick="registerExpense()" style="width:90px; box-shadow:none;">
+                                Añadir
+                            </button>
+                        </div>
                     </div>
                 </div>
+                
+                ${expensesListHtml}
 
                 <button class="btn btn-deliver" onclick="closeShift()" style="background:var(--danger); box-shadow:0 4px 15px rgba(239, 68, 68, 0.3); margin-top:20px; font-weight:bold;">
                     🔒 Cerrar Caja y Entregar Turno
@@ -1599,7 +1633,10 @@ function recalculateShiftCash() {
 }
 
 async function registerExpense() {
+    const descInput = document.getElementById("cash-expense-desc");
     const amtInput = document.getElementById("cash-expense-amount");
+    
+    const description = descInput.value.trim() || "Gasto general";
     const amount = parseFloat(amtInput.value);
     
     if (isNaN(amount) || amount <= 0) {
@@ -1607,12 +1644,24 @@ async function registerExpense() {
         return;
     }
 
+    if (!currentShift.expenses_detail) {
+        currentShift.expenses_detail = [];
+    }
+
+    currentShift.expenses_detail.push({
+        description: description,
+        amount: amount,
+        timestamp: Date.now()
+    });
+
     currentShift.expenses += amount;
     currentShift.sync_pending = true;
+    
+    descInput.value = "";
     amtInput.value = "";
     
     await saveShift();
-    addSystemLog(`💵 Gasto registrado: $${amount.toLocaleString()}. Balance actualizado.`);
+    addSystemLog(`💵 Gasto registrado (${description}): $${amount.toLocaleString()}. Balance actualizado.`);
     renderContent();
     triggerBackgroundSync();
     alert("✅ Gasto registrado en caja.");
