@@ -52,7 +52,19 @@
                     <button class="theme-switch" id="quick-theme-toggle" onclick="toggleTheme()" title="Cambiar Tema">
                         🌓
                     </button>
-                    <span class="date-badge">18 Jun 2026</span>
+                    <span class="date-badge" id="current-date-badge">18 Jun 2026</span>
+                </div>
+            </div>
+
+            <!-- Selector de Mes y Calendario -->
+            <div class="calendar-wrapper">
+                <div class="month-selector">
+                    <button class="month-btn" onclick="prevMonth()">◀</button>
+                    <span class="month-label" id="calendar-month-label">Junio 2026</span>
+                    <button class="month-btn" onclick="nextMonth()">▶</button>
+                </div>
+                <div class="calendar-strip" id="calendar-strip">
+                    <!-- Se llena dinámicamente -->
                 </div>
             </div>
 
