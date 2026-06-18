@@ -482,6 +482,7 @@ async function initApp() {
 
     renderTabs();
     renderLocalidades();
+    renderCalendarStrip();
     
     // Auto-optimizar la ruta inicial de forma silenciosa al arrancar
     if (deliveries.length > 0) {
@@ -546,6 +547,96 @@ function loadLocalStorageFallback() {
         currentShift = JSON.parse(cachedShift);
     }
     addSystemLog("📦 Cargados datos locales desde LocalStorage Fallback.");
+}
+
+// Variables y funciones del Calendario
+let currentDate = "2026-06-18";
+let viewYear = 2026;
+let viewMonth = 5; // Junio (0-indexado)
+
+function renderCalendarStrip() {
+    const strip = document.getElementById("calendar-strip");
+    const label = document.getElementById("calendar-month-label");
+    if (!strip || !label) return;
+    
+    strip.innerHTML = "";
+    
+    const months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    const weekdays = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+    
+    label.textContent = `${months[viewMonth]} ${viewYear}`;
+    
+    const numDays = new Date(viewYear, viewMonth + 1, 0).getDate();
+    
+    let activeDayElement = null;
+    
+    for (let d = 1; d <= numDays; d++) {
+        const dateObj = new Date(viewYear, viewMonth, d);
+        const dayName = weekdays[dateObj.getDay()];
+        
+        const formattedMonth = String(viewMonth + 1).padStart(2, '0');
+        const formattedDay = String(d).padStart(2, '0');
+        const dateStr = `${viewYear}-${formattedMonth}-${formattedDay}`;
+        
+        const count = deliveries.filter(item => item.order_date === dateStr).length;
+        const active = dateStr === currentDate ? 'active' : '';
+        
+        const dayEl = document.createElement("div");
+        dayEl.className = `calendar-day ${active}`;
+        dayEl.onclick = () => selectDate(dateStr);
+        
+        dayEl.innerHTML = `
+            <span class="calendar-day-name">${dayName}</span>
+            <span class="calendar-day-number">${d}</span>
+            ${count > 0 ? `<div class="calendar-dot" title="${count} pedidos"></div>` : ''}
+        `;
+        
+        strip.appendChild(dayEl);
+        
+        if (active) {
+            activeDayElement = dayEl;
+        }
+    }
+    
+    if (activeDayElement) {
+        setTimeout(() => {
+            activeDayElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }, 100);
+    }
+    
+    const badge = document.getElementById("current-date-badge");
+    if (badge) {
+        const parts = currentDate.split('-');
+        const monthsShort = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        badge.textContent = `${parts[2]} ${monthsShort[parseInt(parts[1])-1]} ${parts[0]}`;
+    }
+}
+
+function prevMonth() {
+    viewMonth--;
+    if (viewMonth < 0) {
+        viewMonth = 11;
+        viewYear--;
+    }
+    renderCalendarStrip();
+}
+
+function nextMonth() {
+    viewMonth++;
+    if (viewMonth > 11) {
+        viewMonth = 0;
+        viewYear++;
+    }
+    renderCalendarStrip();
+}
+
+async function selectDate(date) {
+    currentDate = date;
+    addSystemLog(`📅 Fecha seleccionada: ${currentDate}.`);
+    
+    await optimizeRouteByProximity(currentLocalidad, true);
+    
+    renderCalendarStrip();
 }
 
 // 3. Renderizado de Vistas
