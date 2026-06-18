@@ -616,6 +616,121 @@ function renderConfigView(container) {
     }
 }
 
+// 3.5. Algoritmo de Optimización de Ruta por Proximidad (Nearest Neighbor / Vecino Más Cercano)
+function getHaversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radio de la Tierra en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+async function optimizeRouteByProximity(localidad) {
+    addSystemLog(`⚡ Iniciando optimización de ruta para ${localidad}...`);
+    
+    // Punto de partida inicial: Lavaseco Orquídeas base (Usaquén)
+    let startLat = 4.7011;
+    let startLng = -74.0330;
+    
+    // Si la localidad es Suba, centrar el punto de partida en Suba
+    if (localidad === 'Suba') {
+        startLat = 4.7250;
+        startLng = -74.0850;
+    }
+    
+    // Intentar capturar la ubicación GPS del repartidor para optimizar desde su posición actual
+    if (navigator.geolocation) {
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000, enableHighAccuracy: true });
+            });
+            startLat = position.coords.latitude;
+            startLng = position.coords.longitude;
+            addSystemLog(`📡 GPS: Ruta se optimizará desde tu ubicación actual (${startLat.toFixed(5)}, ${startLng.toFixed(5)}).`);
+        } catch (e) {
+            addSystemLog(`📡 GPS: No disponible o rechazado. Usando base de Lavaseco.`);
+        }
+    }
+    
+    // Filtrar los pedidos no completados en la localidad activa
+    let pendingLoc = deliveries.filter(d => d.localidad === localidad && d.status !== 'ENTREGADO');
+    if (pendingLoc.length <= 1) {
+        addSystemLog("ℹ️ No hay suficientes pedidos pendientes para optimizar.");
+        alert("ℹ️ No hay suficientes pedidos pendientes para optimizar la ruta.");
+        return;
+    }
+    
+    // Algoritmo Nearest Neighbor (Vecino más cercano)
+    let unvisited = [...pendingLoc];
+    let orderedRoute = [];
+    let currentLat = startLat;
+    let currentLng = startLng;
+    
+    while (unvisited.length > 0) {
+        let nearestIdx = -1;
+        let minDistance = Infinity;
+        
+        for (let i = 0; i < unvisited.length; i++) {
+            const d = unvisited[i];
+            const lat = d.latitude !== undefined && d.latitude !== null ? d.latitude : startLat;
+            const lng = d.longitude !== undefined && d.longitude !== null ? d.longitude : startLng;
+            
+            const dist = getHaversineDistance(currentLat, currentLng, lat, lng);
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearestIdx = i;
+            }
+        }
+        
+        if (nearestIdx !== -1) {
+            const nextDeliv = unvisited.splice(nearestIdx, 1)[0];
+            orderedRoute.push(nextDeliv);
+            currentLat = nextDeliv.latitude !== undefined && nextDeliv.latitude !== null ? nextDeliv.latitude : startLat;
+            currentLng = nextDeliv.longitude !== undefined && nextDeliv.longitude !== null ? nextDeliv.longitude : startLng;
+        } else {
+            break;
+        }
+    }
+    
+    // Asignar el nuevo sort_order secuencial (0, 10, 20...) a los elementos ordenados
+    orderedRoute.forEach((d, idx) => {
+        const item = deliveries.find(orig => orig.id === d.id);
+        if (item) {
+            item.sort_order = idx * 10;
+            item.sync_pending = true;
+        }
+    });
+    
+    // Asignar orden final a los completados para que queden abajo
+    let completedLoc = deliveries.filter(d => d.localidad === localidad && d.status === 'ENTREGADO');
+    completedLoc.forEach((d, idx) => {
+        d.sort_order = (orderedRoute.length + idx) * 10;
+    });
+    
+    // Ordenar el array general de entregas para persistir consistencia
+    deliveries.sort((a, b) => {
+        if (a.localidad !== b.localidad) {
+            return a.localidad.localeCompare(b.localidad);
+        }
+        if (a.status === 'ENTREGADO' && b.status !== 'ENTREGADO') return 1;
+        if (a.status !== 'ENTREGADO' && b.status === 'ENTREGADO') return -1;
+        
+        const orderA = a.sort_order !== undefined ? a.sort_order : 999;
+        const orderB = b.sort_order !== undefined ? b.sort_order : 999;
+        return orderA - orderB;
+    });
+    
+    await saveDeliveries();
+    addSystemLog(`✅ Ruta de ${localidad} optimizada con éxito.`);
+    renderLocalidades();
+    renderContent();
+    alert("⚡ ¡Ruta optimizada por proximidad con éxito!");
+}
+
 // 4. Acciones de Entregas
 async function startRoute(id) {
     const delivery = deliveries.find(d => d.id === id);
