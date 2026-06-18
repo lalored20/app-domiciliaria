@@ -983,3 +983,22 @@ body.theme-glass .calendar-day.active.different-day {
     background: var(--text-main);
     box-shadow: none;
 }
+
+/* Botón de eliminar gasto */
+.btn-delete-expense {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    opacity: 0.7;
+    transition: all 0.2s ease;
+}
+
+.btn-delete-expense:hover {
+    opacity: 1;
+    transform: scale(1.2);
+}

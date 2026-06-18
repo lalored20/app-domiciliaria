@@ -1073,10 +1073,17 @@ function renderCashView(container) {
                     <span>Monto</span>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:6px; max-height:120px; overflow-y:auto; padding-right:4px;">
-                    ${expensesDetail.map(e => `
-                        <div style="display:flex; justify-content:space-between; font-size:13px;">
+                    ${expensesDetail.map((e, index) => `
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; padding:2px 0;">
                             <span style="color:var(--text-main); font-weight:500;">${e.description}</span>
-                            <span style="color:var(--danger); font-weight:600;">-$${e.amount.toLocaleString()}</span>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="color:var(--danger); font-weight:600;">-$${e.amount.toLocaleString()}</span>
+                                ${shiftClosed ? '' : `
+                                    <button class="btn-delete-expense" onclick="deleteExpense(${index})" title="Eliminar Gasto">
+                                        🗑️
+                                    </button>
+                                `}
+                            </div>
                         </div>
                     `).join('')}
                 </div>
@@ -1644,6 +1651,14 @@ async function registerExpense() {
         return;
     }
 
+    // Alerta de seguridad para montos inusualmente altos (ej: más de $150.000)
+    if (amount > 150000) {
+        const confirmHigh = confirm(`⚠️ Has ingresado un gasto inusualmente alto de $${amount.toLocaleString()}.\n¿Confirmas que el valor es correcto?`);
+        if (!confirmHigh) {
+            return;
+        }
+    }
+
     if (!currentShift.expenses_detail) {
         currentShift.expenses_detail = [];
     }
@@ -1665,6 +1680,28 @@ async function registerExpense() {
     renderContent();
     triggerBackgroundSync();
     alert("✅ Gasto registrado en caja.");
+}
+
+async function deleteExpense(index) {
+    if (currentShift.status === "CERRADO") return;
+    
+    const expense = currentShift.expenses_detail[index];
+    if (!expense) return;
+    
+    if (confirm(`¿Está seguro de que desea eliminar el gasto "${expense.description}" por $${expense.amount.toLocaleString()}?`)) {
+        // Restar del total acumulado de gastos, asegurándonos de no bajar de 0
+        currentShift.expenses = Math.max(0, currentShift.expenses - expense.amount);
+        
+        // Remover del detalle
+        currentShift.expenses_detail.splice(index, 1);
+        currentShift.sync_pending = true;
+        
+        await saveShift();
+        addSystemLog(`🗑️ Gasto eliminado (${expense.description}): $${expense.amount.toLocaleString()}. Balance actualizado.`);
+        renderContent();
+        triggerBackgroundSync();
+        alert("✅ Gasto eliminado correctamente.");
+    }
 }
 
 async function closeShift() {
