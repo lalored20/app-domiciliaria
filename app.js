@@ -422,6 +422,19 @@ async function initApp() {
             } else {
                 deliveries = await db.deliveries.toArray();
                 
+                // CHEQUEAR SI FALTAN PEDIDOS POR DEFECTO (Ej: los nuevos días del calendario)
+                let addedMissing = false;
+                for (const def of DEFAULT_DELIVERIES) {
+                    if (!deliveries.some(d => d.id === def.id)) {
+                        deliveries.push(def);
+                        await db.deliveries.put(def);
+                        addedMissing = true;
+                    }
+                }
+                if (addedMissing) {
+                    addSystemLog("📦 Sembrados nuevos pedidos simulados de calendario.");
+                }
+                
                 // MIGRACIÓN AUTOMÁTICA DE DATOS:
                 // Si el usuario recargó y tenía datos anteriores sin expected_items, sort_order o coordenadas,
                 // actualizamos en caliente usando los datos predeterminados.
@@ -490,6 +503,19 @@ function loadLocalStorageFallback() {
     } else {
         deliveries = [...DEFAULT_DELIVERIES];
         localStorage.setItem("deliveries", JSON.stringify(deliveries));
+    }
+
+    // Chequear si faltan pedidos por defecto (Ej: los nuevos días del calendario)
+    let addedMissingLoc = false;
+    for (const def of DEFAULT_DELIVERIES) {
+        if (!deliveries.some(d => d.id === def.id)) {
+            deliveries.push(def);
+            addedMissingLoc = true;
+        }
+    }
+    if (addedMissingLoc) {
+        localStorage.setItem("deliveries", JSON.stringify(deliveries));
+        addSystemLog("📦 Sembrados nuevos pedidos simulados en LocalStorage.");
     }
 
     // Migración para fallback de LocalStorage
