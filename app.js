@@ -298,6 +298,7 @@ function renderContent() {
 
     if (currentTab === "deliveries") {
         renderDeliveriesView(container);
+        initDragAndDrop();
     } else if (currentTab === "lifo") {
         renderLifoView(container);
     } else if (currentTab === "cash") {
@@ -305,6 +306,160 @@ function renderContent() {
     } else if (currentTab === "config") {
         renderConfigView(container);
     }
+}
+
+// 3.1. Funciones de Arrastre y Reordenamiento (Drag & Drop / Touch-Drag)
+let draggedId = null;
+let touchDraggedElement = null;
+let touchStartY = 0;
+
+function initDragAndDrop() {
+    const lists = document.querySelectorAll('.delivery-list');
+    lists.forEach(list => {
+        const cards = list.querySelectorAll('.card');
+        cards.forEach(card => {
+            const statusPill = card.querySelector('.status-pill');
+            const status = statusPill ? statusPill.textContent : '';
+            if (status === 'Entregado') return;
+            
+            card.setAttribute('draggable', 'true');
+            
+            // Eventos HTML5 Drag & Drop (Escritorio)
+            card.addEventListener('dragstart', handleDragStart);
+            card.addEventListener('dragover', handleDragOver);
+            card.addEventListener('dragend', handleDragEnd);
+            
+            // Eventos Touch (Móviles) vinculados al tirador drag-handle
+            const handle = card.querySelector('.drag-handle');
+            if (handle) {
+                handle.addEventListener('touchstart', handleTouchStart, { passive: false });
+                handle.addEventListener('touchmove', handleTouchMove, { passive: false });
+                handle.addEventListener('touchend', handleTouchEnd);
+            }
+        });
+    });
+}
+
+// Handlers HTML5 (Desktop)
+function handleDragStart(e) {
+    draggedId = this.getAttribute('data-id');
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', draggedId);
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    const list = this.parentNode;
+    const draggingElement = list.querySelector('.dragging');
+    if (!draggingElement || draggingElement === this) return;
+    
+    if (this.parentNode !== draggingElement.parentNode) return;
+    
+    const rect = this.getBoundingClientRect();
+    const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+    list.insertBefore(draggingElement, next ? this.nextSibling : this);
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    draggedId = null;
+    saveNewOrder();
+}
+
+// Handlers Touch (Mobile)
+function handleTouchStart(e) {
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
+    
+    touchDraggedElement = this;
+    touchDraggedElement.classList.add('dragging-touch');
+    const touch = e.touches[0];
+    touchStartY = touch.clientY;
+    
+    e.preventDefault();
+}
+
+function handleTouchMove(e) {
+    if (!touchDraggedElement) return;
+    
+    const touch = e.touches[0];
+    const currentY = touch.clientY;
+    
+    const elementUnderFinger = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (!elementUnderFinger) return;
+    
+    const hoverCard = elementUnderFinger.closest('.card');
+    if (!hoverCard || hoverCard === touchDraggedElement) return;
+    
+    const list = touchDraggedElement.parentNode;
+    if (hoverCard.parentNode !== list) return;
+    
+    const rect = hoverCard.getBoundingClientRect();
+    const next = (currentY - rect.top) / (rect.bottom - rect.top) > 0.5;
+    list.insertBefore(touchDraggedElement, next ? hoverCard.nextSibling : hoverCard);
+    
+    e.preventDefault();
+}
+
+function handleTouchEnd(e) {
+    if (!touchDraggedElement) return;
+    
+    touchDraggedElement.classList.remove('dragging-touch');
+    touchDraggedElement = null;
+    saveNewOrder();
+}
+
+// Guardar el nuevo ordenamiento en Dexie / LocalStorage
+async function saveNewOrder() {
+    const pendingList = document.querySelector('.delivery-list:nth-of-type(2)');
+    const activeList = document.querySelector('.delivery-list:nth-of-type(1)');
+    
+    let index = 0;
+    
+    if (activeList) {
+        const activeCards = activeList.querySelectorAll('.card');
+        activeCards.forEach(card => {
+            const id = card.getAttribute('data-id');
+            const delivery = deliveries.find(d => d.id === id);
+            if (delivery) {
+                delivery.sort_order = index * 10;
+                delivery.sync_pending = true;
+                index++;
+            }
+        });
+    }
+    
+    if (pendingList) {
+        const pendingCards = pendingList.querySelectorAll('.card');
+        pendingCards.forEach(card => {
+            const id = card.getAttribute('data-id');
+            const delivery = deliveries.find(d => d.id === id);
+            if (delivery) {
+                delivery.sort_order = index * 10;
+                delivery.sync_pending = true;
+                index++;
+            }
+        });
+    }
+    
+    deliveries.sort((a, b) => {
+        if (a.localidad !== b.localidad) {
+            return a.localidad.localeCompare(b.localidad);
+        }
+        if (a.status === 'ENTREGADO' && b.status !== 'ENTREGADO') return 1;
+        if (a.status !== 'ENTREGADO' && b.status === 'ENTREGADO') return -1;
+        
+        const orderA = a.sort_order !== undefined ? a.sort_order : 999;
+        const orderB = b.sort_order !== undefined ? b.sort_order : 999;
+        return orderA - orderB;
+    });
+    
+    await saveDeliveries();
+    addSystemLog("📝 Reordenamiento manual guardado localmente.");
+    
+    renderLocalidades();
+    renderContent();
 }
 
 // Vista de Domicilios
