@@ -637,6 +637,8 @@ async function selectDate(date) {
     await optimizeRouteByProximity(currentLocalidad, true);
     
     renderCalendarStrip();
+    renderLocalidades();
+    renderContent();
 }
 
 // 3. Renderizado de Vistas
