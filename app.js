@@ -661,8 +661,12 @@ function renderLifoView(container) {
     const sorted = [...deliveries]
         .filter(d => d.status !== "ENTREGADO")
         .sort((a, b) => {
-            if (a.localidad !== b.localidad) {
-                return a.localidad.localeCompare(b.localidad);
+            // Priorizar la localidad activa actual (currentLocalidad) para que vaya arriba (se entrega primero)
+            const aActive = a.localidad === currentLocalidad ? 0 : 1;
+            const bActive = b.localidad === currentLocalidad ? 0 : 1;
+            
+            if (aActive !== bActive) {
+                return aActive - bActive;
             }
             return (a.sort_order || 0) - (b.sort_order || 0);
         });
