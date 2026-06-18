@@ -309,7 +309,10 @@ function renderContent() {
 
 // Vista de Domicilios
 function renderDeliveriesView(container) {
-    const filtered = deliveries.filter(d => d.localidad === currentLocalidad);
+    const filtered = deliveries
+        .filter(d => d.localidad === currentLocalidad)
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+        
     const activeRoute = filtered.filter(d => d.status === "EN_RUTA");
     const pending = filtered.filter(d => d.status === "PENDIENTE");
     const completed = filtered.filter(d => d.status === "ENTREGADO");
@@ -348,11 +351,16 @@ function renderDeliveriesView(container) {
     }
     container.appendChild(activeList);
 
-    // Sección de Pendientes
+    // Sección de Pendientes con botón de Auto-Ruta
     container.innerHTML += `
-        <div class="section-title" style="margin-top: 15px;">
+        <div class="section-title" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
             <span>Pedidos Pendientes</span>
-            <span class="badge-count">${pending.length}</span>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <button class="btn" onclick="optimizeRouteByProximity('${currentLocalidad}')" style="padding: 4px 8px; font-size: 11px; height: 26px; border-radius: 8px; background: rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.2); color: var(--primary); display: flex; align-items: center; gap: 4px; box-shadow: none;" title="Optimizar ruta por cercanía física">
+                    ⚡ Auto-Ruta
+                </button>
+                <span class="badge-count">${pending.length}</span>
+            </div>
         </div>
     `;
 
@@ -387,6 +395,7 @@ function renderDeliveriesView(container) {
 function createDeliveryCard(d) {
     const card = document.createElement("div");
     card.className = `card ${d.status === 'EN_RUTA' ? 'active-route' : ''}`;
+    card.setAttribute('data-id', d.id);
     
     let statusClass = "pending";
     let statusLabel = "Pendiente";
@@ -404,8 +413,11 @@ function createDeliveryCard(d) {
 
     card.innerHTML = `
         <div class="card-header">
-            <div class="time-badge">
-                🕒 <span>${d.time_window}</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+                ${d.status !== 'ENTREGADO' ? `<div class="drag-handle" title="Arrastrar para ordenar">⋮⋮</div>` : ''}
+                <div class="time-badge">
+                    🕒 <span>${d.time_window}</span>
+                </div>
             </div>
             <div class="status-pill ${statusClass}">${statusLabel}</div>
         </div>
