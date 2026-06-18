@@ -244,7 +244,13 @@ async function initApp() {
 
     renderTabs();
     renderLocalidades();
-    renderContent();
+    
+    // Auto-optimizar la ruta inicial de forma silenciosa al arrancar
+    if (deliveries.length > 0) {
+        await optimizeRouteByProximity(currentLocalidad, true);
+    } else {
+        renderContent();
+    }
 
     setInterval(runBackgroundSync, 10000);
     runBackgroundSync();
@@ -1457,11 +1463,13 @@ function selectNavbarTab(element, tab) {
     renderContent();
 }
 
-function selectLocalidadTab(element, name) {
+async function selectLocalidadTab(element, name) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     element.classList.add('active');
     currentLocalidad = name;
-    renderContent();
+    
+    // Auto-optimizar la ruta de la localidad seleccionada de forma silenciosa
+    await optimizeRouteByProximity(currentLocalidad, true);
 }
 
 function renderTabs() {
