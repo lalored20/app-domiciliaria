@@ -1927,75 +1927,177 @@ function setTheme(theme) {
     }
 }
 
-// Sincronización en segundo plano con Supabase
+// Sincronización en segundo plano con Supabase y Servidor Local
 let isSyncing = false;
 async function runBackgroundSync() {
-    if (!supabaseClient || isSyncing) return;
+    if (isSyncing) return;
     isSyncing = true;
     
-    addSystemLog("🔄 Sync: Verificando datos locales pendientes de subir...");
-    
     try {
+        // 1. Sincronizar cola de mensajes de WhatsApp (Tanto para Supabase como para local)
         if (db) {
-            const pendingDeliveries = await db.deliveries.toArray();
-            const pendingList = pendingDeliveries.filter(d => d.sync_pending === true || d.sync_pending === 1);
+            const pendingMessages = await db.pending_wa_messages.toArray();
+            for (const msg of pendingMessages) {
+                if (msg.attempts > 5) {
+                    addSystemLog(`⚠️ Cola WA: Descartado mensaje para ${msg.client_name || msg.phone} tras 5 intentos.`);
+                    await db.pending_wa_messages.delete(msg.id);
+                    continue;
+                }
                 
-            for (const d of pendingList) {
-                addSystemLog(`🔄 Sync: Subiendo entrega de ${d.client_name}...`);
-                const payload = {
-                    chatbot_order_id: d.qr_code, 
-                    client_name: d.client_name,
-                    client_phone: d.client_phone,
-                    delivery_address: d.address,
-                    localidad: d.localidad,
-                    time_window: d.time_window,
-                    amount: d.amount,
-                    pay_method: d.pay_method,
-                    status: d.status,
-                    qr_code: d.qr_code,
-                    expected_items: d.expected_items,
-                    collected_items: d.collected_items,
-                    signature_drawn: d.signature_drawn,
-                    latitude: d.latitude || null,
-                    longitude: d.longitude || null
-                };
-                
-                const { error } = await supabaseClient.from('deliveries').upsert(payload);
-                if (!error) {
-                    d.sync_pending = false;
-                    await db.deliveries.put(d);
-                    addSystemLog(`✅ Sync: Entrega ${d.client_name} subida de forma idempotente.`);
-                } else {
-                    addSystemLog(`❌ Sync Error en entrega: ${error.message}`);
+                try {
+                    msg.attempts++;
+                    await db.pending_wa_messages.put(msg);
+                    
+                    const response = await fetch("/api/whatsapp/send", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            phone: msg.phone,
+                            message: msg.message,
+                            client_name: msg.client_name,
+                            address: msg.address,
+                            status: msg.status,
+                            order_id: msg.order_id
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        await db.pending_wa_messages.delete(msg.id);
+                        addSystemLog(`✅ Cola WA: Mensaje pendiente para ${msg.client_name} enviado con éxito.`);
+                        if (typeof loadWhatsappLogs === 'function') loadWhatsappLogs();
+                    }
+                } catch (e) {
+                    console.error("Fallo reintentando mensaje de WhatsApp en segundo plano:", e);
                 }
             }
-            
-            const storedShift = await db.shift.get("shift_today");
-            if (storedShift && storedShift.sync_pending) {
-                addSystemLog("🔄 Sync: Sincronizando estado de caja...");
-                const payload = {
-                    driver_id: (await supabaseClient.auth.getUser()).data.user?.id || null,
-                    shift_date: storedShift.shift_date,
-                    initial_cash: storedShift.initial_cash,
-                    collected_cash: storedShift.collected_cash,
-                    expenses: storedShift.expenses,
-                    status: storedShift.status
-                };
-                
-                if (payload.driver_id) {
-                    const { error } = await supabaseClient.from('driver_shifts').upsert(payload, { onConflict: 'driver_id, shift_date' });
+        }
+
+        // 2. Sincronización de base de datos
+        if (supabaseClient) {
+            addSystemLog("🔄 Sync: Verificando datos locales con Supabase Cloud...");
+            if (db) {
+                const pendingDeliveries = await db.deliveries.toArray();
+                const pendingList = pendingDeliveries.filter(d => d.sync_pending === true || d.sync_pending === 1);
+                    
+                for (const d of pendingList) {
+                    addSystemLog(`🔄 Sync: Subiendo entrega de ${d.client_name} a Supabase...`);
+                    const payload = {
+                        chatbot_order_id: d.chatbot_order_id || d.id, 
+                        client_name: d.client_name,
+                        client_phone: d.client_phone,
+                        delivery_address: d.address,
+                        localidad: d.localidad,
+                        time_window: d.time_window,
+                        amount: d.amount,
+                        pay_method: d.pay_method,
+                        status: d.status,
+                        qr_code: d.qr_code,
+                        expected_items: d.expected_items,
+                        collected_items: d.collected_items,
+                        signature_drawn: d.signature_drawn,
+                        latitude: d.latitude || null,
+                        longitude: d.longitude || null
+                    };
+                    
+                    const { error } = await supabaseClient.from('deliveries').upsert(payload);
                     if (!error) {
+                        d.sync_pending = false;
+                        await db.deliveries.put(d);
+                        addSystemLog(`✅ Sync: Entrega ${d.client_name} subida a Supabase.`);
+                    } else {
+                        addSystemLog(`❌ Sync Error en entrega: ${error.message}`);
+                    }
+                }
+                
+                const storedShift = await db.shift.get("shift_today");
+                if (storedShift && storedShift.sync_pending) {
+                    addSystemLog("🔄 Sync: Sincronizando estado de caja a Supabase...");
+                    const payload = {
+                        driver_id: (await supabaseClient.auth.getUser()).data.user?.id || null,
+                        shift_date: storedShift.shift_date,
+                        initial_cash: storedShift.initial_cash,
+                        collected_cash: storedShift.collected_cash,
+                        expenses: storedShift.expenses,
+                        status: storedShift.status
+                    };
+                    
+                    if (payload.driver_id) {
+                        const { error } = await supabaseClient.from('driver_shifts').upsert(payload, { onConflict: 'driver_id, shift_date' });
+                        if (!error) {
+                            storedShift.sync_pending = false;
+                            await db.shift.put(storedShift);
+                            addSystemLog("✅ Sync: Caja sincronizada con Supabase.");
+                        } else {
+                            addSystemLog(`❌ Sync Error en caja: ${error.message}`);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Sincronización LOCAL con Express backend
+            addSystemLog("🔄 Sync: Verificando datos con servidor local...");
+            if (db) {
+                const localD = await db.deliveries.toArray();
+                
+                // Enviar cambios locales al servidor local
+                const response = await fetch("/api/deliveries/sync", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ deliveries: localD })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.data) {
+                        let updatedCount = 0;
+                        for (const serverD of result.data) {
+                            const localItem = localD.find(d => d.id === serverD.id || (d.chatbot_order_id && d.chatbot_order_id === serverD.chatbot_order_id));
+                            
+                            // Si no existe localmente, o cambió el estado en el servidor y no tenemos cambios pendientes locales
+                            if (!localItem) {
+                                await db.deliveries.put(serverD);
+                                updatedCount++;
+                            } else if (localItem.sync_pending === false && localItem.status !== serverD.status) {
+                                await db.deliveries.put(serverD);
+                                updatedCount++;
+                            }
+                        }
+                        
+                        // Quitar flag sync_pending si el servidor reconoció los cambios
+                        for (const d of localD) {
+                            if (d.sync_pending) {
+                                d.sync_pending = false;
+                                await db.deliveries.put(d);
+                            }
+                        }
+                        
+                        if (updatedCount > 0) {
+                            addSystemLog(`✅ Sync: Descargados ${updatedCount} nuevos pedidos desde el webhook.`);
+                            deliveries = await db.deliveries.toArray();
+                            renderLocalidades();
+                            renderContent();
+                        }
+                    }
+                }
+                
+                // Sincronizar Shift/Turno localmente
+                const storedShift = await db.shift.get("shift_today");
+                if (storedShift && storedShift.sync_pending) {
+                    const shiftRes = await fetch("/api/shift/sync", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ shift: storedShift })
+                    });
+                    if (shiftRes.ok) {
                         storedShift.sync_pending = false;
                         await db.shift.put(storedShift);
-                        addSystemLog("✅ Sync: Caja sincronizada exitosamente.");
-                    } else {
-                        addSystemLog(`❌ Sync Error en caja: ${error.message}`);
+                        addSystemLog("✅ Sync: Caja local sincronizada con el servidor.");
                     }
                 }
             }
         }
     } catch (e) {
-        addSystemLog("❌ Sync Error de red: " + e.message);
+        addSystemLog("❌ Sync Error de conexión: " + e.message);
     } finally {
         isSyncing = false;
     }
