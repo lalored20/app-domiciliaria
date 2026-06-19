@@ -1119,9 +1119,12 @@ function renderCashView(container) {
             </div>
 
             ${shiftClosed ? `
-                <div style="background:rgba(16, 185, 129, 0.15); border:1px solid var(--success); border-radius:16px; padding:15px; text-align:center; color:var(--success); font-weight:600;">
+                <div style="background:rgba(16, 185, 129, 0.15); border:1px solid var(--success); border-radius:16px; padding:15px; text-align:center; color:var(--success); font-weight:600; margin-bottom:10px;">
                     🔒 Turno Cerrado Exitosamente. Cuentas conciliadas.
                 </div>
+                <button class="btn btn-chat" onclick="shareShiftReportToWhatsapp()" style="background:var(--secondary); border-color:var(--secondary); font-weight:bold; width:100%; margin-bottom:15px; box-shadow:none;">
+                    📲 Compartir Reporte de Cierre por WhatsApp
+                </button>
                 ${expensesListHtml}
             ` : `
                 <div class="form-group" style="margin-top:10px;">
@@ -1139,12 +1142,66 @@ function renderCashView(container) {
                 
                 ${expensesListHtml}
 
-                <button class="btn btn-deliver" onclick="closeShift()" style="background:var(--danger); box-shadow:0 4px 15px rgba(239, 68, 68, 0.3); margin-top:20px; font-weight:bold;">
-                    🔒 Cerrar Caja y Entregar Turno
-                </button>
+                <div style="display:grid; grid-template-columns:1fr; gap:10px; margin-top:20px;">
+                    <button class="btn btn-chat" onclick="shareShiftReportToWhatsapp()" style="background:var(--secondary); border-color:var(--secondary); font-weight:bold; box-shadow:0 4px 15px rgba(6, 182, 212, 0.3);">
+                        📲 Compartir Reporte a WhatsApp
+                    </button>
+                    <button class="btn btn-deliver" onclick="closeShift()" style="background:var(--danger); box-shadow:0 4px 15px rgba(239, 68, 68, 0.3); font-weight:bold;">
+                        🔒 Cerrar Caja y Entregar Turno
+                    </button>
+                </div>
             `}
         </div>
     `;
+}
+
+async function shareShiftReportToWhatsapp() {
+    let adminPhone = localStorage.getItem("wa-admin-phone") || "";
+    if (!adminPhone) {
+        adminPhone = prompt("📱 Ingrese el teléfono del administrador (con código de país, ej: 573001234567):");
+        if (!adminPhone) return;
+        localStorage.setItem("wa-admin-phone", adminPhone.replace(/\D/g, ''));
+    }
+    
+    const statusLabel = currentShift.status === "CERRADO" ? "🔒 CERRADO Y CONCILIADO" : "🔓 ABIERTO";
+    const netBalance = currentShift.initial_cash + currentShift.collected_cash - currentShift.expenses;
+    
+    const shiftDeliveries = deliveries.filter(d => d.order_date === currentShift.shift_date);
+    const completed = shiftDeliveries.filter(d => d.status === "ENTREGADO").length;
+    const pending = shiftDeliveries.filter(d => d.status === "PENDIENTE").length;
+    const active = shiftDeliveries.filter(d => d.status === "EN_RUTA").length;
+    
+    let expensesText = "";
+    if (currentShift.expenses_detail && currentShift.expenses_detail.length > 0) {
+        expensesText = currentShift.expenses_detail.map(e => `- ${e.description}: $${e.amount.toLocaleString()}`).join("\n");
+    } else {
+        expensesText = "Ninguno";
+    }
+
+    const reportText = `*📦 REPORTE DE CAJA - LAVASECO ORQUÍDEAS*
+-------------------------------------------
+👤 *Domiciliario:* ${currentShift.driver_name || "Ramón Mendoza"}
+📅 *Fecha Turno:* ${currentShift.shift_date}
+🚦 *Estado:* ${statusLabel}
+
+💰 *Base Inicial:* $${currentShift.initial_cash.toLocaleString()}
+💵 *Recaudo Efectivo:* $${currentShift.collected_cash.toLocaleString()}
+❌ *Total Gastos:* $${currentShift.expenses.toLocaleString()}
+
+📋 *Detalle de Gastos:*
+${expensesText}
+
+⚖️ *Balance Neto:* $${netBalance.toLocaleString()}
+
+📈 *Entregas:*
+✅ Completadas: ${completed}
+⏳ Pendientes: ${pending}
+🏍️ En Ruta: ${active}
+-------------------------------------------
+_Enviado desde App Domiciliaria_`;
+
+    await sendWhatsappNotification(adminPhone, "REPORTADO", reportText);
+    alert("📲 Reporte de caja enviado o abierto en WhatsApp.");
 }
 
 function renderConfigView(container) {
