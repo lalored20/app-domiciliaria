@@ -32,6 +32,11 @@ if (supabaseUrl && supabaseServiceKey) {
     console.log("ℹ️ Corriendo en modo simulación (Sin base de datos Supabase conectada).");
 }
 
+// Almacenamiento local en memoria para simulación sin Supabase
+const localDeliveries = [];
+let localShift = null;
+const whatsappLogs = [];
+
 // Clasificación básica de Localidades
 function detectarLocalidad(direccion) {
     const dirUpper = direccion.toUpperCase();
@@ -76,6 +81,7 @@ app.post('/api/webhook/order', async (req, res) => {
     const localidad = detectarLocalidad(address);
     const prendasEsperadas = parseInt(expected_items) || 1;
     const payload = {
+        id: "web_" + order_id,
         chatbot_order_id: order_id,
         client_name,
         client_phone: client_phone.replace(/\D/g, ''),
@@ -93,11 +99,20 @@ app.post('/api/webhook/order', async (req, res) => {
         delivery_date: new Date().toISOString().split('T')[0]
     };
 
+    // Guardar en la base de datos en memoria local para que la app se actualice sin Supabase
+    const existingIdx = localDeliveries.findIndex(d => d.chatbot_order_id === order_id || d.id === payload.id);
+    if (existingIdx !== -1) {
+        localDeliveries[existingIdx] = { ...localDeliveries[existingIdx], ...payload };
+    } else {
+        localDeliveries.push(payload);
+    }
+    console.log(`📦 [Webhook] Orden guardada en memoria local. Total de órdenes locales: ${localDeliveries.length}`);
+
     if (!supabase) {
         console.log("✅ [Webhook] Simulación exitosa (Sin Supabase). Datos generados:", payload);
         return res.status(200).json({
             success: true,
-            message: "Simulado: Registro de orden recibido con éxito.",
+            message: "Simulado: Registro de orden recibido y guardado localmente.",
             data: payload
         });
     }
@@ -116,7 +131,7 @@ app.post('/api/webhook/order', async (req, res) => {
         console.log("✅ [Webhook] Orden guardada en Supabase:", data[0]);
         return res.status(200).json({
             success: true,
-            message: "Despacho guardado exitosamente en Supabase.",
+            message: "Despacho guardado exitosamente en Supabase y local.",
             data: data[0]
         });
 
@@ -126,11 +141,100 @@ app.post('/api/webhook/order', async (req, res) => {
     }
 });
 
+// NUEVOS ENDPOINTS DE SINCRONIZACIÓN Y WHATSAPP
+
+// Obtener órdenes guardadas en el backend
+app.get('/api/deliveries', (req, res) => {
+    res.json({ success: true, data: localDeliveries });
+});
+
+// Sincronizar (Merge) de entregas del frontend al backend
+app.post('/api/deliveries/sync', (req, res) => {
+    const clientDeliveries = req.body.deliveries || [];
+    clientDeliveries.forEach(clientD => {
+        const idx = localDeliveries.findIndex(d => d.id === clientD.id || (d.chatbot_order_id && d.chatbot_order_id === clientD.chatbot_order_id));
+        if (idx !== -1) {
+            // Mezclar preservando campos más recientes
+            localDeliveries[idx] = { ...localDeliveries[idx], ...clientD };
+        } else {
+            localDeliveries.push(clientD);
+        }
+    });
+    res.json({ success: true, data: localDeliveries });
+});
+
+// Sincronizar Shift/Turno
+app.post('/api/shift/sync', (req, res) => {
+    localShift = req.body.shift;
+    console.log("⚙️ [Caja] Sincronizado estado del turno en el servidor:", localShift);
+    res.json({ success: true, data: localShift });
+});
+
+// Obtener Shift/Turno
+app.get('/api/shift', (req, res) => {
+    res.json({ success: true, data: localShift });
+});
+
+// Proxy para enviar notificaciones a través de una API de WhatsApp original
+app.post('/api/whatsapp/send', async (req, res) => {
+    const { phone, message, client_name, address, status, order_id } = req.body;
+    const timestamp = new Date().toISOString();
+    
+    console.log(`\n💬 [WhatsApp API Send]`);
+    console.log(`📱 Destinatario: ${phone} (${client_name || 'Sin Nombre'})`);
+    console.log(`✉️ Mensaje: "${message}"`);
+    console.log(`📦 Detalle: Orden ${order_id || 'N/A'}, Dirección: ${address || 'N/A'}, Estado: ${status || 'N/A'}`);
+    
+    const logEntry = {
+        timestamp: new Date().toLocaleTimeString(),
+        phone,
+        message,
+        client_name,
+        status: "ENVIADO",
+        order_id
+    };
+    whatsappLogs.push(logEntry);
+    if (whatsappLogs.length > 50) whatsappLogs.shift();
+
+    // Reenvío a API de WhatsApp externa si está configurada en variables de entorno o localmente
+    const extUrl = process.env.WHATSAPP_API_URL || '';
+    const extToken = process.env.WHATSAPP_API_TOKEN || '';
+    
+    if (extUrl) {
+        try {
+            console.log(`🔗 [Proxy] Reenviando a API externa: ${extUrl}`);
+            const headers = { "Content-Type": "application/json" };
+            if (extToken) headers["Authorization"] = `Bearer ${extToken}`;
+            
+            const response = await fetch(extUrl, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ phone, message, client_name, order_id })
+            });
+            console.log(`🔗 [Proxy] Respuesta API externa: ${response.status}`);
+        } catch (e) {
+            console.error(`❌ [Proxy] Error de reenvío:`, e.message);
+        }
+    }
+
+    res.json({
+        success: true,
+        message: "Mensaje procesado e impreso en el servidor.",
+        log: logEntry
+    });
+});
+
+// Obtener logs de WhatsApp
+app.get('/api/whatsapp/logs', (req, res) => {
+    res.json({ success: true, logs: whatsappLogs });
+});
+
 // Ruta de información del servidor
 app.get('/api/status', (req, res) => {
     res.json({
         status: "online",
         supabase_connected: supabase !== null,
+        local_deliveries_count: localDeliveries.length,
         time: new Date().toISOString()
     });
 });
