@@ -993,7 +993,7 @@ function createDeliveryCard(d) {
             <button class="btn btn-maps" onclick="openMaps('${d.address}')">
                 🗺️ Maps / Waze
             </button>
-            <button class="btn btn-chat" onclick="sendWhatsappNotification('${d.id}')">
+            <button class="btn btn-chat" onclick="toggleWhatsappTemplatesDropdown(event, '${d.id}')" style="position:relative;">
                 💬 WhatsApp
             </button>
             ${startButton}
