@@ -40,17 +40,39 @@ const whatsappLogs = [];
 // Clasificación básica de Localidades
 function detectarLocalidad(direccion) {
     const dirUpper = direccion.toUpperCase();
-    if (dirUpper.includes("USAQUEN") || dirUpper.includes("CEDRITOS") || dirUpper.includes("SANTA BARBARA")) {
+    if (dirUpper.includes("USAQUEN") || dirUpper.includes("CEDRITOS") || dirUpper.includes("SANTA BARBARA") || dirUpper.includes("CANTALEJO")) {
         return "Usaquén";
     }
-    if (dirUpper.includes("SUBA") || dirUpper.includes("NIZA") || dirUpper.includes("ALHAMBRA") || dirUpper.includes("COLINA")) {
+    if (dirUpper.includes("SUBA") || dirUpper.includes("NIZA") || dirUpper.includes("ALHAMBRA") || dirUpper.includes("COLINA") || dirUpper.includes("PORTALES")) {
         return "Suba";
     }
-    if (dirUpper.includes("CHAPINERO") || dirUpper.includes("CHICO") || dirUpper.includes("ROSALES")) {
+    if (dirUpper.includes("CHAPINERO") || dirUpper.includes("CHICO") || dirUpper.includes("ROSALES") || dirUpper.includes("RETIRO")) {
         return "Chapinero";
+    }
+    if (dirUpper.includes("TEUSAQUILLO") || dirUpper.includes("SALITRE") || dirUpper.includes("GALERIAS") || dirUpper.includes("QUINTA PAREDES")) {
+        return "Teusaquillo";
+    }
+    if (dirUpper.includes("BARRIOS UNIDOS") || dirUpper.includes("CASTELLANA") || dirUpper.includes("METROPOLIS") || dirUpper.includes("POLO")) {
+        return "Barrios Unidos";
+    }
+    if (dirUpper.includes("ENGATIVA") || dirUpper.includes("BOCHICA") || dirUpper.includes("ALAMOS") || dirUpper.includes("MINUTO DE DIOS")) {
+        return "Engativá";
+    }
+    if (dirUpper.includes("FONTIBON") || dirUpper.includes("MODELIA") || dirUpper.includes("HAYUELOS") || dirUpper.includes("ZONA FRANCA")) {
+        return "Fontibón";
+    }
+    if (dirUpper.includes("KENNEDY") || dirUpper.includes("CASTILLA") || dirUpper.includes("AMERICAS") || dirUpper.includes("TINTAL")) {
+        return "Kennedy";
+    }
+    if (dirUpper.includes("BOSA") || dirUpper.includes("RECREO")) {
+        return "Bosa";
+    }
+    if (dirUpper.includes("PUENTE ARANDA") || dirUpper.includes("SALAZAR GOMEZ") || dirUpper.includes("MUZU")) {
+        return "Puente Aranda";
     }
     return "Usaquén"; 
 }
+
 
 // Webhook receptor del Chatbot de WhatsApp
 app.post('/api/webhook/order', async (req, res) => {
