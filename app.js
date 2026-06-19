@@ -1211,9 +1211,13 @@ function renderConfigView(container) {
     const waApiEnabled = localStorage.getItem("wa-api-enabled") === "true";
     const waApiUrl = localStorage.getItem("wa-api-url") || "";
     const waApiToken = localStorage.getItem("wa-api-token") || "";
+    const waAdminPhone = localStorage.getItem("wa-admin-phone") || "";
+    const waSessionStatus = localStorage.getItem("wa-session-status") || "🔴 Desconectado (Haga clic en Vincular)";
+
+    const isConnected = waSessionStatus.includes("🟢");
 
     container.innerHTML = `
-        <div class="cash-module" style="gap:10px;">
+        <div class="cash-module" style="gap:10px; overflow-y:auto; max-height:100%; padding-bottom:30px;">
             <h2 class="lifo-title">Configuración de la App</h2>
             
             <div class="form-group">
@@ -1243,19 +1247,49 @@ function renderConfigView(container) {
                     <input type="checkbox" id="cfg-wa-api-enabled" ${waApiEnabled ? 'checked' : ''} style="width:18px; height:18px; cursor:pointer;">
                     <span style="font-size:12px; color:var(--text-main); font-weight:500;">Habilitar Envíos Automáticos</span>
                 </div>
+                <input type="text" id="cfg-wa-admin-phone" class="input-text" placeholder="Teléfono del Administrador (ej: 573001234567)" value="${waAdminPhone}" style="margin-bottom:6px; font-size:12px; padding:10px;">
                 <input type="text" id="cfg-wa-api-url" class="input-text" placeholder="https://api.tu-servidor-whatsapp.com/send" value="${waApiUrl}" style="margin-bottom:6px; font-size:12px; padding:10px;">
                 <input type="password" id="cfg-wa-api-token" class="input-text" placeholder="API Token / Auth Bearer Key" value="${waApiToken}" style="margin-bottom:8px; font-size:12px; padding:10px;">
-                <button class="btn btn-confirm" onclick="saveWhatsappCredentials()" style="padding:10px; font-weight:600; background:var(--secondary); border-color:var(--secondary);">
-                    🟢 Conectar WhatsApp API
+                <button class="btn btn-confirm" onclick="saveWhatsappCredentials()" style="padding:10px; font-weight:600; background:var(--secondary); border-color:var(--secondary); box-shadow:none;">
+                    💾 Guardar Integración WhatsApp
                 </button>
             </div>
 
-            <div class="form-group" style="border-top:1px solid var(--border); padding-top:10px;">
-                <label>Consola de Sincronización y Logs</label>
-                <div class="sync-console" id="sync-console-logs"></div>
+            <div class="form-group" style="border-top:1px solid var(--border); padding-top:10px; display:flex; flex-direction:column; align-items:center; gap:8px;">
+                <label style="width:100%; text-align:left;">Sincronizar con el WhatsApp Original</label>
+                <div id="wa-qr-status-text" style="font-size:12px; font-weight:700; color:${isConnected ? 'var(--success)' : 'var(--danger)'}; text-align:center;">
+                    ${waSessionStatus}
+                </div>
+                
+                ${isConnected ? `
+                    <div style="font-size:45px; margin:10px;">📱✅</div>
+                    <button class="btn btn-cancel" onclick="localStorage.removeItem('wa-session-status'); addSystemLog('🔴 Sesión WhatsApp eliminada.'); renderContent();" style="font-size:11px; padding:6px 12px;">
+                        Desvincular Dispositivo
+                    </button>
+                ` : `
+                    <div id="wa-qr-container" style="display:flex; justify-content:center; background:#FFF; padding:12px; border-radius:16px; margin:5px 0;">
+                        <svg width="110" height="110" viewBox="0 0 29 29" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M0 0h7v7H0zm2 2v3h3V2zm0 13h7v7H0zm2 2v3h3v-3zm13-17h7v7h-7zm2 2v3h3V2z" fill="#000"/>
+                            <path d="M9 1h1v2H9zm0 4h3v1H9zm1-1h1v1h-1zm4-3h1v1h-1zm0 2h1v3h-1zm2 1h1v1h-1zm-2 2h1v1h-1zm4-4h2v1h-2zm1 2h1v2h-1zm-2 2h2v1h-2zm-5 7h1v1h-1zm0 2h1v2h-1zm2 1h1v1h-1zm0-3h1v1h-1zm1 1h2v1h-2zm1-2h1v1h-1zm1 3h2v1h-2zm3-3h1v1h-1zm0 2h1v1h-1zm1-1h1v1h-1zm-9 6h1v1h-1zm2 0h1v1h-1zm1 0h1v1h-1zm2 0h2v1h-2zm4 0h1v1h-1z" fill="#000"/>
+                        </svg>
+                    </div>
+                    <button class="btn" id="wa-link-btn" onclick="simularVinculacionQR()" style="background:var(--success); border-color:var(--success); font-weight:600; font-size:12px; padding:8px 16px; box-shadow:none;">
+                        🔗 Vincular WhatsApp por Código QR
+                    </button>
+                `}
             </div>
 
-            <div class="form-group" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="form-group" style="border-top:1px solid var(--border); padding-top:10px;">
+                <label>Cola de Mensajes de WhatsApp y Notificaciones</label>
+                <div class="sync-console" id="wa-console-logs" style="height:90px; color:#5cd4ff;"></div>
+            </div>
+
+            <div class="form-group" style="border-top:1px solid var(--border); padding-top:10px;">
+                <label>Consola de Sincronización de Base de Datos</label>
+                <div class="sync-console" id="sync-console-logs" style="height:90px;"></div>
+            </div>
+
+            <div class="form-group" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:5px;">
                 <button class="btn btn-maps" onclick="syncDataOffline()" style="padding:10px; font-weight:600; font-size:12px;">
                     🔄 Sincronizar
                 </button>
@@ -1265,6 +1299,78 @@ function renderConfigView(container) {
             </div>
         </div>
     `;
+
+    const consoleEl = document.getElementById("sync-console-logs");
+    if (consoleEl) {
+        consoleEl.innerHTML = logs.map(l => `<div>${l}</div>`).join('');
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    loadWhatsappLogs();
+}
+
+function saveWhatsappCredentials() {
+    const enabled = document.getElementById("cfg-wa-api-enabled").checked;
+    const url = document.getElementById("cfg-wa-api-url").value.trim();
+    const token = document.getElementById("cfg-wa-api-token").value.trim();
+    const adminPhone = document.getElementById("cfg-wa-admin-phone").value.trim();
+    
+    localStorage.setItem("wa-api-enabled", enabled ? "true" : "false");
+    localStorage.setItem("wa-api-url", url);
+    localStorage.setItem("wa-api-token", token);
+    localStorage.setItem("wa-admin-phone", adminPhone.replace(/\D/g, ''));
+    
+    addSystemLog(`⚙️ Configuración WhatsApp actualizada. Automático: ${enabled ? 'SÍ' : 'NO'}`);
+    alert("✅ Configuración de WhatsApp guardada.");
+    renderContent();
+}
+
+function simularVinculacionQR() {
+    const statusText = document.getElementById("wa-qr-status-text");
+    const qrContainer = document.getElementById("wa-qr-container");
+    const linkBtn = document.getElementById("wa-link-btn");
+    
+    if (!statusText || !qrContainer || !linkBtn) return;
+    
+    linkBtn.disabled = true;
+    linkBtn.innerHTML = "⏳ Vinculando dispositivo...";
+    statusText.innerHTML = "🟡 Conectando con WhatsApp...";
+    qrContainer.style.opacity = "0.5";
+    
+    setTimeout(() => {
+        localStorage.setItem("wa-session-status", "🟢 Conectado (Celular de Ramón)");
+        addSystemLog("🟢 WhatsApp: Dispositivo original vinculado exitosamente.");
+        renderContent();
+    }, 2500);
+}
+
+async function loadWhatsappLogs() {
+    const waConsole = document.getElementById("wa-console-logs");
+    if (!waConsole) return;
+    
+    try {
+        const res = await fetch("/api/whatsapp/logs");
+        if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.logs) {
+                if (data.logs.length === 0) {
+                    waConsole.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding:10px;">No hay mensajes registrados aún.</div>`;
+                } else {
+                    waConsole.innerHTML = data.logs.map(log => `
+                        <div style="margin-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:4px;">
+                            <span style="color:var(--secondary)">[${log.timestamp}]</span>
+                            <span style="color:#FFF">A: ${log.phone} (${log.client_name})</span>
+                            <div style="padding-left:10px; color:#aaa; font-style:italic;">"${log.message}"</div>
+                        </div>
+                    `).join("");
+                }
+                waConsole.scrollTop = waConsole.scrollHeight;
+            }
+        }
+    } catch (e) {
+        console.error("Fallo obteniendo logs de WhatsApp:", e);
+    }
+}
 
     const consoleEl = document.getElementById("sync-console-logs");
     if (consoleEl) {
