@@ -1372,12 +1372,6 @@ async function loadWhatsappLogs() {
     }
 }
 
-    const consoleEl = document.getElementById("sync-console-logs");
-    if (consoleEl) {
-        consoleEl.innerHTML = logs.map(l => `<div>${l}</div>`).join('');
-        consoleEl.scrollTop = consoleEl.scrollHeight;
-    }
-}
 
 // 3.5. Algoritmo de Optimización de Ruta por Proximidad (Nearest Neighbor / Vecino Más Cercano)
 function getHaversineDistance(lat1, lon1, lat2, lon2) {
