@@ -5,11 +5,12 @@ let db = null;
 try {
     if (typeof Dexie !== 'undefined') {
         db = new Dexie("AppDomiciliariaDB");
-        db.version(3).stores({
+        db.version(4).stores({
             deliveries: 'id, client_name, client_phone, address, localidad, time_window, amount, pay_method, status, qr_code, expected_items, collected_items, evidence_photo, signature_drawn, order_date, sync_pending',
-            shift: 'id, driver_name, initial_cash, collected_cash, expenses, status, shift_date, sync_pending'
+            shift: 'id, driver_name, initial_cash, collected_cash, expenses, status, shift_date, sync_pending',
+            pending_wa_messages: '++id, phone, message, status, timestamp, attempts'
         });
-        console.log("🔋 Dexie.js (IndexedDB local) activo.");
+        console.log("🔋 Dexie.js (IndexedDB local) activo (v4).");
     }
 } catch (e) {
     console.warn("⚠️ Falló Dexie. Usando LocalStorage fallback.", e);
@@ -1146,11 +1147,13 @@ function renderCashView(container) {
     `;
 }
 
-// Vista de Configuración
 function renderConfigView(container) {
     const isGlass = document.body.classList.contains("theme-glass");
     const supabaseUrl = localStorage.getItem("supabase-url") || "";
     const supabaseKey = localStorage.getItem("supabase-key") || "";
+    const waApiEnabled = localStorage.getItem("wa-api-enabled") === "true";
+    const waApiUrl = localStorage.getItem("wa-api-url") || "";
+    const waApiToken = localStorage.getItem("wa-api-token") || "";
 
     container.innerHTML = `
         <div class="cash-module" style="gap:10px;">
@@ -1174,6 +1177,19 @@ function renderConfigView(container) {
                 <input type="password" id="cfg-supabase-key" class="input-text" placeholder="Anon / Service Key" value="${supabaseKey}" style="margin-bottom:8px; font-size:12px; padding:10px;">
                 <button class="btn btn-confirm" onclick="saveSupabaseCredentials()" style="padding:10px; font-weight:600;">
                     💾 Guardar Credenciales
+                </button>
+            </div>
+
+            <div class="form-group" style="border-top:1px solid var(--border); padding-top:10px;">
+                <label>Integración WhatsApp API Gateway (Automático)</label>
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                    <input type="checkbox" id="cfg-wa-api-enabled" ${waApiEnabled ? 'checked' : ''} style="width:18px; height:18px; cursor:pointer;">
+                    <span style="font-size:12px; color:var(--text-main); font-weight:500;">Habilitar Envíos Automáticos</span>
+                </div>
+                <input type="text" id="cfg-wa-api-url" class="input-text" placeholder="https://api.tu-servidor-whatsapp.com/send" value="${waApiUrl}" style="margin-bottom:6px; font-size:12px; padding:10px;">
+                <input type="password" id="cfg-wa-api-token" class="input-text" placeholder="API Token / Auth Bearer Key" value="${waApiToken}" style="margin-bottom:8px; font-size:12px; padding:10px;">
+                <button class="btn btn-confirm" onclick="saveWhatsappCredentials()" style="padding:10px; font-weight:600; background:var(--secondary); border-color:var(--secondary);">
+                    🟢 Conectar WhatsApp API
                 </button>
             </div>
 
@@ -1349,6 +1365,12 @@ async function startRoute(id) {
         addSystemLog(`🏍️ Ruta iniciada para ${delivery.client_name}. Estado actualizado.`);
         renderContent();
         triggerBackgroundSync();
+        
+        // Enviar notificación automática si la API está configurada
+        const waEnabled = localStorage.getItem("wa-api-enabled") === "true";
+        if (waEnabled) {
+            sendWhatsappNotification(id, "EN_RUTA");
+        }
     }
 }
 
@@ -1357,13 +1379,56 @@ function openMaps(address) {
     window.open(url, '_blank');
 }
 
-function sendWhatsappNotification(id) {
+async function sendWhatsappNotification(id, statusTrigger = "EN_RUTA") {
     const d = deliveries.find(d => d.id === id);
-    if (d) {
-        const msg = `Hola ${d.client_name}, soy tu repartidor de Lavaseco Orquídeas. Ya voy en camino a tu dirección: ${d.address}. Estaré allí en unos 10 minutos.`;
+    if (!d) return;
+
+    let msg = "";
+    if (statusTrigger === "EN_RUTA") {
+        msg = `Hola ${d.client_name}, soy tu repartidor de Lavaseco Orquídeas. Ya voy en camino a tu dirección: ${d.address}. Estaré allí en unos 10 minutos.`;
+    } else if (statusTrigger === "ENTREGADO") {
+        msg = `Hola ${d.client_name}, tu servicio de Lavaseco Orquídeas ha sido entregado exitosamente. ¡Muchas gracias por tu confianza!`;
+    }
+
+    const waEnabled = localStorage.getItem("wa-api-enabled") === "true";
+    const waUrl = localStorage.getItem("wa-api-url") || "";
+    const waToken = localStorage.getItem("wa-api-token") || "";
+
+    if (waEnabled && waUrl) {
+        addSystemLog(`💬 WhatsApp API: Enviando notificación automática a ${d.client_name}...`);
+        try {
+            const headers = {
+                "Content-Type": "application/json"
+            };
+            if (waToken) {
+                headers["Authorization"] = `Bearer ${waToken}`;
+            }
+            const response = await fetch(waUrl, {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                    phone: d.client_phone,
+                    message: msg,
+                    client_name: d.client_name,
+                    address: d.address,
+                    status: d.status,
+                    order_id: d.id,
+                    chatbot_order_id: d.chatbot_order_id || null
+                })
+            });
+            if (response.ok) {
+                addSystemLog(`✅ WhatsApp API: Notificación enviada a ${d.client_name} (Estado: ${statusTrigger}).`);
+            } else {
+                addSystemLog(`❌ WhatsApp API Error: Servidor respondió con código ${response.status}.`);
+            }
+        } catch (err) {
+            addSystemLog(`❌ WhatsApp API Error: Fallo de conexión (${err.message}).`);
+        }
+    } else {
+        // Fallback al enlace manual wa.me
         const url = `https://wa.me/${d.client_phone}?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
-        addSystemLog(`💬 Notificación de WhatsApp enviada a ${d.client_name}.`);
+        addSystemLog(`💬 WhatsApp Manual: Abierta ventana para enviar a ${d.client_name}.`);
     }
 }
 
@@ -1624,6 +1689,13 @@ async function confirmDelivery() {
         
         triggerBackgroundSync();
         addSystemLog(`🎉 Pedido de ${d.client_name} completado con éxito.`);
+        
+        // Enviar notificación automática si la API está configurada
+        const waEnabled = localStorage.getItem("wa-api-enabled") === "true";
+        if (waEnabled) {
+            sendWhatsappNotification(d.id, "ENTREGADO");
+        }
+        
         alert("🎉 ¡Despacho completado con éxito!");
     }
 }
@@ -1727,6 +1799,20 @@ function saveSupabaseCredentials() {
     initSupabase();
     alert("💾 Credenciales guardadas. Intentando conectar a la nube...");
     triggerBackgroundSync();
+}
+
+function saveWhatsappCredentials() {
+    const enabled = document.getElementById("cfg-wa-api-enabled").checked;
+    const url = document.getElementById("cfg-wa-api-url").value.trim();
+    const token = document.getElementById("cfg-wa-api-token").value.trim();
+    
+    localStorage.setItem("wa-api-enabled", enabled ? "true" : "false");
+    localStorage.setItem("wa-api-url", url);
+    localStorage.setItem("wa-api-token", token);
+    
+    addSystemLog(`⚙️ Configuración de WhatsApp API actualizada. Automático: ${enabled ? 'SÍ' : 'NO'}`);
+    alert("✅ Configuración de WhatsApp API guardada con éxito.");
+    renderContent();
 }
 
 function changeThemeMode(theme) {
