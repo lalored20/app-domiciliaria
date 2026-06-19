@@ -1379,57 +1379,155 @@ function openMaps(address) {
     window.open(url, '_blank');
 }
 
-async function sendWhatsappNotification(id, statusTrigger = "EN_RUTA") {
-    const d = deliveries.find(d => d.id === id);
-    if (!d) return;
+async function queueWhatsappMessage(phone, message, client_name = "", order_id = "", address = "", status = "") {
+    if (db) {
+        try {
+            await db.pending_wa_messages.add({
+                phone,
+                message,
+                client_name,
+                order_id,
+                address,
+                status,
+                timestamp: Date.now(),
+                attempts: 0
+            });
+            addSystemLog(`📥 Cola WA: Mensaje para ${client_name || phone} encolado localmente.`);
+        } catch (e) {
+            console.error("Fallo al encolar mensaje de WhatsApp:", e);
+        }
+    } else {
+        addSystemLog(`⚠️ Advertencia: Dexie inactivo, no se pudo encolar mensaje.`);
+    }
+}
 
-    let msg = "";
-    if (statusTrigger === "EN_RUTA") {
-        msg = `Hola ${d.client_name}, soy tu repartidor de Lavaseco Orquídeas. Ya voy en camino a tu dirección: ${d.address}. Estaré allí en unos 10 minutos.`;
-    } else if (statusTrigger === "ENTREGADO") {
-        msg = `Hola ${d.client_name}, tu servicio de Lavaseco Orquídeas ha sido entregado exitosamente. ¡Muchas gracias por tu confianza!`;
+async function sendWhatsappNotification(id, statusTrigger = "EN_RUTA", customText = "") {
+    let phone = "";
+    let clientName = "";
+    let address = "";
+    let status = "";
+    let orderId = "";
+    
+    const d = deliveries.find(item => item.id === id);
+    if (d) {
+        phone = d.client_phone;
+        clientName = d.client_name;
+        address = d.address;
+        status = d.status;
+        orderId = d.id;
+    } else {
+        // Podría ser un número directo (ej: del Administrador para el reporte de turno)
+        phone = id.replace(/\D/g, '');
+        clientName = "Administrador";
+        address = "Cierre de Turno";
+        status = "REPORTADO";
+        orderId = "shift_" + currentShift.shift_date;
+    }
+
+    let msg = customText;
+    if (!msg) {
+        if (statusTrigger === "EN_RUTA") {
+            msg = `Hola ${clientName}, soy Ramón de Lavaseco Orquídeas. Ya voy en camino a tu dirección: ${address}. Estaré allí en unos 10 minutos.`;
+        } else if (statusTrigger === "ENTREGADO") {
+            msg = `Hola ${clientName}, tu servicio de Lavaseco Orquídeas ha sido entregado exitosamente. ¡Muchas gracias por tu confianza!`;
+        } else {
+            msg = `Notificación de Lavaseco Orquídeas para ${clientName}.`;
+        }
     }
 
     const waEnabled = localStorage.getItem("wa-api-enabled") === "true";
-    const waUrl = localStorage.getItem("wa-api-url") || "";
-    const waToken = localStorage.getItem("wa-api-token") || "";
-
-    if (waEnabled && waUrl) {
-        addSystemLog(`💬 WhatsApp API: Enviando notificación automática a ${d.client_name}...`);
+    
+    if (waEnabled) {
+        addSystemLog(`💬 WhatsApp API: Enviando notificación a ${clientName}...`);
         try {
-            const headers = {
-                "Content-Type": "application/json"
-            };
-            if (waToken) {
-                headers["Authorization"] = `Bearer ${waToken}`;
-            }
-            const response = await fetch(waUrl, {
+            // Llamar al proxy del servidor local para registrar/enviar y evitar problemas de CORS
+            const response = await fetch("/api/whatsapp/send", {
                 method: "POST",
-                headers: headers,
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    phone: d.client_phone,
+                    phone: phone,
                     message: msg,
-                    client_name: d.client_name,
-                    address: d.address,
-                    status: d.status,
-                    order_id: d.id,
-                    chatbot_order_id: d.chatbot_order_id || null
+                    client_name: clientName,
+                    address: address,
+                    status: status,
+                    order_id: orderId
                 })
             });
-            if (response.ok) {
-                addSystemLog(`✅ WhatsApp API: Notificación enviada a ${d.client_name} (Estado: ${statusTrigger}).`);
+            
+            const result = await response.json();
+            if (response.ok && result.success) {
+                addSystemLog(`✅ WhatsApp API: Notificación entregada al proxy con éxito.`);
+                if (typeof loadWhatsappLogs === 'function') loadWhatsappLogs();
             } else {
-                addSystemLog(`❌ WhatsApp API Error: Servidor respondió con código ${response.status}.`);
+                addSystemLog(`❌ WhatsApp API Error: Código ${response.status}. Encolando mensaje.`);
+                await queueWhatsappMessage(phone, msg, clientName, orderId, address, status);
             }
         } catch (err) {
-            addSystemLog(`❌ WhatsApp API Error: Fallo de conexión (${err.message}).`);
+            addSystemLog(`❌ WhatsApp API Error: Conexión fallida (${err.message}). Encolando mensaje.`);
+            await queueWhatsappMessage(phone, msg, clientName, orderId, address, status);
         }
     } else {
         // Fallback al enlace manual wa.me
-        const url = `https://wa.me/${d.client_phone}?text=${encodeURIComponent(msg)}`;
+        const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
-        addSystemLog(`💬 WhatsApp Manual: Abierta ventana para enviar a ${d.client_name}.`);
+        addSystemLog(`💬 WhatsApp Manual: Abierta ventana para enviar a ${clientName}.`);
     }
+}
+
+function toggleWhatsappTemplatesDropdown(event, id) {
+    event.stopPropagation();
+    
+    const existing = document.getElementById(`wa-dropdown-${id}`);
+    if (existing) {
+        existing.remove();
+        return;
+    }
+    
+    document.querySelectorAll('.wa-dropdown-menu').forEach(el => el.remove());
+    
+    const d = deliveries.find(item => item.id === id);
+    if (!d) return;
+    
+    const btn = event.currentTarget;
+    const parent = btn.parentNode;
+    
+    const dropdown = document.createElement("div");
+    dropdown.id = `wa-dropdown-${id}`;
+    dropdown.className = "wa-dropdown-menu";
+    
+    const templates = [
+        { label: "🏍️ En Camino (10m)", trigger: "EN_RUTA", text: `Hola ${d.client_name}, soy Ramón de Lavaseco Orquídeas. Ya voy en camino a tu dirección: ${d.address}. Estaré allí en unos 10 minutos.` },
+        { label: "🕒 Retraso en Vía", trigger: "RETRASO", text: `Hola ${d.client_name}, he tenido un pequeño retraso de 15 minutos en la vía. Estaré llegando lo más pronto posible. ¡Gracias!` },
+        { label: "📍 Llegué al Punto", trigger: "LLEGADA", text: `Hola ${d.client_name}, ya me encuentro afuera de tu dirección: ${d.address}.` },
+        { label: "📦 Confirmar Recibido", trigger: "ENTREGADO", text: `Hola ${d.client_name}, tu servicio por valor de $${d.amount.toLocaleString()} ha sido entregado. ¡Muchas gracias por tu confianza!` },
+        { label: "💬 Chat Manual", trigger: "MANUAL", text: "" }
+    ];
+    
+    templates.forEach(t => {
+        const item = document.createElement("div");
+        item.className = "wa-dropdown-item";
+        item.textContent = t.label;
+        item.onclick = (e) => {
+            e.stopPropagation();
+            dropdown.remove();
+            if (t.trigger === "MANUAL") {
+                const url = `https://wa.me/${d.client_phone}`;
+                window.open(url, '_blank');
+                addSystemLog(`💬 WhatsApp Manual: Abierto chat libre con ${d.client_name}.`);
+            } else {
+                sendWhatsappNotification(id, t.trigger, t.text);
+            }
+        };
+        dropdown.appendChild(item);
+    });
+    
+    parent.appendChild(dropdown);
+    
+    const closeHandler = () => {
+        dropdown.remove();
+        document.removeEventListener('click', closeHandler);
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 10);
 }
 
 // 5. Canvas de Firma y Simuladores del Modal
