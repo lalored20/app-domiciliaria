@@ -67,7 +67,10 @@ function getLocalidadCenterCoords(localidad) {
         "Fontibón": { lat: 4.6738, lon: -74.1442 },
         "Kennedy": { lat: 4.6307, lon: -74.1534 },
         "Bosa": { lat: 4.6186, lon: -74.1917 },
-        "Puente Aranda": { lat: 4.6205, lon: -74.1105 }
+        "Puente Aranda": { lat: 4.6205, lon: -74.1105 },
+        "Usme": { lat: 4.4600, lon: -74.1200 },
+        "Ciudad Bolívar": { lat: 4.5300, lon: -74.1500 },
+        "San Cristóbal": { lat: 4.5600, lon: -74.0800 }
     };
     return coords[localidad] || coords["Usaquén"];
 }
