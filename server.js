@@ -634,76 +634,88 @@ app.get('/api/status', (req, res) => {
 function startBackgroundGeocoding() {
     console.log("📡 [Geocoder] Iniciando servicio de geocodificación automática...");
     setInterval(() => {
-        // Buscar un pedido en messages.db que no tenga coordenadas geocodificadas en domiciliaria.db
-        chatbotDb.all(`
-            SELECT o.id, o.clientAddress 
-            FROM local_orders o
-            LEFT JOIN delivery_metadata m ON o.id = m.order_id
-            WHERE m.latitude IS NULL OR m.order_id IS NULL
-            LIMIT 1
-        `, [], (err, rows) => {
+        // 1. Obtener todas las órdenes que ya tienen coordenadas en nuestra DB local
+        appDb.all(`SELECT order_id FROM delivery_metadata WHERE latitude IS NOT NULL`, [], (err, metaRows) => {
             if (err) {
-                console.error("❌ [Geocoder] Error consultando órdenes para geocodificar:", err.message);
-                return;
-            }
-            if (!rows || rows.length === 0) {
-                // No hay órdenes pendientes de geocodificación
+                console.error("❌ [Geocoder] Error consultando delivery_metadata:", err.message);
                 return;
             }
             
-            const order = rows[0];
-            const address = order.clientAddress;
+            const geocodedIds = metaRows ? metaRows.map(r => r.order_id) : [];
             
-            if (!address || address === 'Recogida WhatsApp') {
-                // Si es recogida de WhatsApp, no se puede geocodificar con texto de dirección.
-                // Asignamos coordenadas por defecto del Lavaseco temporalmente para que no se quede reintentando infinitamente.
-                const nowEpoch = Math.floor(Date.now() / 1000);
-                const baseLat = 4.7011;
-                const baseLng = -74.0330;
-                
-                appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
-                    if (err) return;
-                    if (meta) {
-                        appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, nowEpoch, order.id]);
-                    } else {
-                        appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?)`, [order.id, baseLat, baseLng, getColombiaDateString(), nowEpoch]);
-                    }
-                });
-                return;
+            // 2. Buscar una orden en local_orders (chatbot db) que no esté en la lista de geocodificados
+            let query = `SELECT id, clientAddress FROM local_orders`;
+            let params = [];
+            
+            if (geocodedIds.length > 0) {
+                const placeholders = geocodedIds.map(() => '?').join(',');
+                query += ` WHERE id NOT IN (${placeholders})`;
+                params = geocodedIds;
             }
-
-            console.log(`📡 [Geocoder] Intentando geolocalizar dirección: "${address}" para orden ${order.id}...`);
-            geocodeAddress(address).then(coords => {
-                const nowEpoch = Math.floor(Date.now() / 1000);
-                let finalLat = coords ? coords.lat : null;
-                let finalLon = coords ? coords.lon : null;
+            query += ` LIMIT 1`;
+            
+            chatbotDb.all(query, params, (err, rows) => {
+                if (err) {
+                    console.error("❌ [Geocoder] Error consultando local_orders:", err.message);
+                    return;
+                }
+                if (!rows || rows.length === 0) {
+                    // No hay órdenes pendientes de geocodificación
+                    return;
+                }
                 
-                if (!finalLat || !finalLon) {
-                    const localidad = detectarLocalidad(address);
-                    const fallback = getLocalidadCenterCoords(localidad);
-                    finalLat = fallback.lat;
-                    finalLon = fallback.lon;
-                    console.log(`⚠️ [Geocoder] No se pudo encontrar coordenadas para "${address}". Asignando centro de ${localidad}: (${finalLat}, ${finalLon})`);
-                } else {
-                    console.log(`✅ [Geocoder] Geolocalizado con éxito: (${finalLat}, ${finalLon})`);
+                const order = rows[0];
+                const address = order.clientAddress;
+                
+                if (!address || address === 'Recogida WhatsApp') {
+                    const nowEpoch = Math.floor(Date.now() / 1000);
+                    const baseLat = 4.7011;
+                    const baseLng = -74.0330;
+                    
+                    appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
+                        if (err) return;
+                        if (meta) {
+                            appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, nowEpoch, order.id]);
+                        } else {
+                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?)`, [order.id, baseLat, baseLng, getColombiaDateString(), nowEpoch]);
+                        }
+                    });
+                    return;
                 }
 
-                // Guardar/Actualizar en domiciliaria.db de forma segura
-                appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
-                    if (err) return;
-                    if (meta) {
-                        appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, updated_at = ? WHERE order_id = ?`, [finalLat, finalLon, nowEpoch, order.id], (err) => {
-                            if (err) console.error("❌ [Geocoder] Error al actualizar coordenadas:", err.message);
-                        });
+                console.log(`📡 [Geocoder] Intentando geolocalizar dirección: "${address}" para orden ${order.id}...`);
+                geocodeAddress(address).then(coords => {
+                    const nowEpoch = Math.floor(Date.now() / 1000);
+                    let finalLat = coords ? coords.lat : null;
+                    let finalLon = coords ? coords.lon : null;
+                    
+                    if (!finalLat || !finalLon) {
+                        const localidad = detectarLocalidad(address);
+                        const fallback = getLocalidadCenterCoords(localidad);
+                        finalLat = fallback.lat;
+                        finalLon = fallback.lon;
+                        console.log(`⚠️ [Geocoder] No se pudo encontrar coordenadas para "${address}". Asignando centro de ${localidad}: (${finalLat}, ${finalLon})`);
                     } else {
-                        appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?)`, [order.id, finalLat, finalLon, getColombiaDateString(), nowEpoch], (err) => {
-                            if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
-                        });
+                        console.log(`✅ [Geocoder] Geolocalizado con éxito: (${finalLat}, ${finalLon})`);
                     }
+
+                    // Guardar/Actualizar en domiciliaria.db de forma segura
+                    appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
+                        if (err) return;
+                        if (meta) {
+                            appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, updated_at = ? WHERE order_id = ?`, [finalLat, finalLon, nowEpoch, order.id], (err) => {
+                                if (err) console.error("❌ [Geocoder] Error al actualizar coordenadas:", err.message);
+                            });
+                        } else {
+                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?)`, [order.id, finalLat, finalLon, getColombiaDateString(), nowEpoch], (err) => {
+                                if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
+                            });
+                        }
+                    });
                 });
             });
         });
-    }, 5000); // Consulta cada 5 segundos para respetar los límites de velocidad (1 query/sec de OSM Nominatim)
+    }, 5000);
 }
 
 const PORT = 3000;
