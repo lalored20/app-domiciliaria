@@ -2099,14 +2099,25 @@ function renderLocalidades() {
     if (!selector) return;
     selector.innerHTML = "";
     
-    const allDeliveries = deliveries.length > 0 ? deliveries : DEFAULT_DELIVERIES;
-    const localidades = [...new Set(allDeliveries.map(d => d.localidad))];
+    // Solo mostrar las localidades que tienen entregas programadas para la fecha seleccionada
+    const deliveriesToday = deliveries.filter(d => d.order_date === currentDate);
+    let localidades = [...new Set(deliveriesToday.map(d => d.localidad))];
+    
     if (localidades.length === 0) {
         localidades.push("Usaquén");
     }
+
+    // Asegurarse de que la localidad seleccionada actualmente tenga pedidos hoy,
+    // de lo contrario, preseleccionar la primera localidad que sí tenga entregas.
+    if (deliveriesToday.length > 0 && !deliveriesToday.some(d => d.localidad === currentLocalidad)) {
+        const firstActive = deliveriesToday.find(d => d.status !== 'ENTREGADO') || deliveriesToday[0];
+        if (firstActive) {
+            currentLocalidad = firstActive.localidad;
+        }
+    }
     
     localidades.forEach((loc) => {
-        const count = allDeliveries.filter(d => d.localidad === loc && d.order_date === currentDate && d.status !== 'ENTREGADO').length;
+        const count = deliveriesToday.filter(d => d.localidad === loc && d.status !== 'ENTREGADO').length;
         const active = loc === currentLocalidad ? 'active' : '';
         const tab = document.createElement("div");
         tab.className = `tab ${active}`;

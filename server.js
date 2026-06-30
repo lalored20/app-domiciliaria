@@ -33,6 +33,7 @@ if (supabaseUrl && supabaseServiceKey) {
 }
 
 const sqlite3 = require('sqlite3').verbose();
+const https = require('https');
 const CHATBOT_DB_PATH = 'C:\\Users\\rmend\\Desktop\\Whatsapp Original\\data\\messages.db';
 const APP_DB_PATH = path.join(__dirname, 'domiciliaria.db');
 
@@ -48,6 +49,66 @@ function epochToColombiaDateString(epoch) {
     const options = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
     const formatter = new Intl.DateTimeFormat('fr-CA', options);
     return formatter.format(new Date(epoch * 1000));
+}
+
+// Coordenadas aproximadas de centros de localidades de Bogotá
+function getLocalidadCenterCoords(localidad) {
+    const coords = {
+        "Usaquén": { lat: 4.7011, lon: -74.0330 },
+        "Suba": { lat: 4.7250, lon: -74.0850 },
+        "Chapinero": { lat: 4.6675, lon: -74.0560 },
+        "Teusaquillo": { lat: 4.6432, lon: -74.0903 },
+        "Barrios Unidos": { lat: 4.6669, lon: -74.0759 },
+        "Engativá": { lat: 4.7012, lon: -74.1206 },
+        "Fontibón": { lat: 4.6738, lon: -74.1442 },
+        "Kennedy": { lat: 4.6307, lon: -74.1534 },
+        "Bosa": { lat: 4.6186, lon: -74.1917 },
+        "Puente Aranda": { lat: 4.6205, lon: -74.1105 }
+    };
+    return coords[localidad] || coords["Usaquén"];
+}
+
+// Geocodificar dirección usando OpenStreetMap Nominatim
+function geocodeAddress(address) {
+    return new Promise((resolve) => {
+        let query = address;
+        // Limpiar indicaciones comunes para mejorar la geocodificación
+        query = query.replace(/(apto|apartamento|casa|piso|bloque|conjunto|interior|torre|barrio).*$/i, '').trim();
+        
+        if (!query.toLowerCase().includes("bogota")) {
+            query += ", Bogota, Colombia";
+        }
+        
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
+        
+        const options = {
+            headers: {
+                'User-Agent': 'AppDomiciliaria/1.0 (lalored20@app-domiciliaria.com)'
+            }
+        };
+
+        https.get(url, options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const results = JSON.parse(data);
+                    if (results && results.length > 0) {
+                        resolve({
+                            lat: parseFloat(results[0].lat),
+                            lon: parseFloat(results[0].lon)
+                        });
+                    } else {
+                        resolve(null);
+                    }
+                } catch (e) {
+                    resolve(null);
+                }
+            });
+        }).on('error', () => {
+            resolve(null);
+        });
+    });
 }
 
 // In-memory array for WhatsApp logs
@@ -569,6 +630,82 @@ app.get('/api/status', (req, res) => {
     });
 });
 
+// Iniciar el proceso de geocodificación en segundo plano
+function startBackgroundGeocoding() {
+    console.log("📡 [Geocoder] Iniciando servicio de geocodificación automática...");
+    setInterval(() => {
+        // Buscar un pedido en messages.db que no tenga coordenadas geocodificadas en domiciliaria.db
+        chatbotDb.all(`
+            SELECT o.id, o.clientAddress 
+            FROM local_orders o
+            LEFT JOIN delivery_metadata m ON o.id = m.order_id
+            WHERE m.latitude IS NULL OR m.order_id IS NULL
+            LIMIT 1
+        `, [], (err, rows) => {
+            if (err) {
+                console.error("❌ [Geocoder] Error consultando órdenes para geocodificar:", err.message);
+                return;
+            }
+            if (!rows || rows.length === 0) {
+                // No hay órdenes pendientes de geocodificación
+                return;
+            }
+            
+            const order = rows[0];
+            const address = order.clientAddress;
+            
+            if (!address || address === 'Recogida WhatsApp') {
+                // Si es recogida de WhatsApp, no se puede geocodificar con texto de dirección.
+                // Asignamos coordenadas por defecto del Lavaseco temporalmente para que no se quede reintentando infinitamente.
+                const nowEpoch = Math.floor(Date.now() / 1000);
+                const baseLat = 4.7011;
+                const baseLng = -74.0330;
+                
+                appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
+                    if (err) return;
+                    if (meta) {
+                        appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, nowEpoch, order.id]);
+                    } else {
+                        appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?)`, [order.id, baseLat, baseLng, getColombiaDateString(), nowEpoch]);
+                    }
+                });
+                return;
+            }
+
+            console.log(`📡 [Geocoder] Intentando geolocalizar dirección: "${address}" para orden ${order.id}...`);
+            geocodeAddress(address).then(coords => {
+                const nowEpoch = Math.floor(Date.now() / 1000);
+                let finalLat = coords ? coords.lat : null;
+                let finalLon = coords ? coords.lon : null;
+                
+                if (!finalLat || !finalLon) {
+                    const localidad = detectarLocalidad(address);
+                    const fallback = getLocalidadCenterCoords(localidad);
+                    finalLat = fallback.lat;
+                    finalLon = fallback.lon;
+                    console.log(`⚠️ [Geocoder] No se pudo encontrar coordenadas para "${address}". Asignando centro de ${localidad}: (${finalLat}, ${finalLon})`);
+                } else {
+                    console.log(`✅ [Geocoder] Geolocalizado con éxito: (${finalLat}, ${finalLon})`);
+                }
+
+                // Guardar/Actualizar en domiciliaria.db de forma segura
+                appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
+                    if (err) return;
+                    if (meta) {
+                        appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, updated_at = ? WHERE order_id = ?`, [finalLat, finalLon, nowEpoch, order.id], (err) => {
+                            if (err) console.error("❌ [Geocoder] Error al actualizar coordenadas:", err.message);
+                        });
+                    } else {
+                        appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?)`, [order.id, finalLat, finalLon, getColombiaDateString(), nowEpoch], (err) => {
+                            if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
+                        });
+                    }
+                });
+            });
+        });
+    }, 5000); // Consulta cada 5 segundos para respetar los límites de velocidad (1 query/sec de OSM Nominatim)
+}
+
 const PORT = 3000;
 app.listen(PORT, () => {
     console.log("\n=======================================================");
@@ -576,4 +713,7 @@ app.listen(PORT, () => {
     console.log(`💻 Frontend App: http://localhost:${PORT}`);
     console.log(`📥 API Webhook:  http://localhost:${PORT}/api/webhook/order`);
     console.log("=======================================================\n");
+    
+    // Iniciar geocodificador en segundo plano
+    startBackgroundGeocoding();
 });
