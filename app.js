@@ -1915,11 +1915,17 @@ async function runBackgroundSync() {
                         for (const serverD of result.data) {
                             const localItem = localD.find(d => d.id === serverD.id || (d.chatbot_order_id && d.chatbot_order_id === serverD.chatbot_order_id));
                             
-                            // Si no existe localmente, o cambió el estado en el servidor y no tenemos cambios pendientes locales
+                            // Si no existe localmente, o no tenemos cambios pendientes locales y difiere del servidor en estado, coordenadas, dirección o localidad
                             if (!localItem) {
                                 await db.deliveries.put(serverD);
                                 updatedCount++;
-                            } else if (localItem.sync_pending === false && localItem.status !== serverD.status) {
+                            } else if (localItem.sync_pending === false && (
+                                localItem.status !== serverD.status ||
+                                localItem.latitude !== serverD.latitude ||
+                                localItem.longitude !== serverD.longitude ||
+                                localItem.address !== serverD.address ||
+                                localItem.localidad !== serverD.localidad
+                            )) {
                                 await db.deliveries.put(serverD);
                                 updatedCount++;
                             }
