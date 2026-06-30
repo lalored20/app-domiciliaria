@@ -118,34 +118,34 @@ function formatColombianAddress(addr) {
     return clean;
 }
 
-// Geocodificar dirección usando OpenStreetMap Nominatim
-function geocodeAddress(address) {
+// Ejecutar una consulta directa a OpenStreetMap Nominatim
+function queryNominatim(query) {
     return new Promise((resolve) => {
-        let query = formatColombianAddress(address);
-        // Eliminar apartamentos, casas, etc.
-        query = query.replace(/(apto|apartamento|casa|piso|bloque|conjunto|interior|torre|barrio).*$/i, '').trim();
+        let cleanQuery = query;
+        // Eliminar apartamentos, casas, etc. para la consulta de búsqueda
+        cleanQuery = cleanQuery.replace(/(apto|apartamento|casa|piso|bloque|conjunto|interior|torre|barrio).*$/i, '').trim();
         
         // Reemplazar palabras de número en español
-        query = query.replace(/n[uú]mero\s*/ig, ' ');
-        query = query.replace(/nro\.?\s*/ig, ' ');
-        query = query.replace(/\bno\.?\s*(?=\d)/ig, ' ');
-        query = query.replace(/\bno\s+(?=\d)/ig, ' ');
+        cleanQuery = cleanQuery.replace(/n[uú]mero\s*/ig, ' ');
+        cleanQuery = cleanQuery.replace(/nro\.?\s*/ig, ' ');
+        cleanQuery = cleanQuery.replace(/\bno\.?\s*(?=\d)/ig, ' ');
+        cleanQuery = cleanQuery.replace(/\bno\s+(?=\d)/ig, ' ');
         
         // Normalizar espaciado de letras y bis comunes en Bogotá
-        query = query.replace(/\s+A\s+/ig, 'a ');
-        query = query.replace(/\s+B\s+/ig, 'b ');
-        query = query.replace(/\s+C\s+/ig, 'c ');
-        query = query.replace(/\s+D\s+/ig, 'd ');
-        query = query.replace(/\s+F\s+/ig, 'f ');
-        query = query.replace(/\s+Bis\s+/ig, 'bis ');
+        cleanQuery = cleanQuery.replace(/\s+A\s+/ig, 'a ');
+        cleanQuery = cleanQuery.replace(/\s+B\s+/ig, 'b ');
+        cleanQuery = cleanQuery.replace(/\s+C\s+/ig, 'c ');
+        cleanQuery = cleanQuery.replace(/\s+D\s+/ig, 'd ');
+        cleanQuery = cleanQuery.replace(/\s+F\s+/ig, 'f ');
+        cleanQuery = cleanQuery.replace(/\s+Bis\s+/ig, 'bis ');
         
-        query = query.trim();
+        cleanQuery = cleanQuery.trim();
         
-        if (!query.toLowerCase().includes("bogota")) {
-            query += ", Bogota, Colombia";
+        if (!cleanQuery.toLowerCase().includes("bogota")) {
+            cleanQuery += ", Bogota, Colombia";
         }
         
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=1`;
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cleanQuery)}&addressdetails=1&limit=1`;
         
         const options = {
             headers: {
@@ -179,6 +179,38 @@ function geocodeAddress(address) {
             resolve(null);
         });
     });
+}
+
+// Geocodificar dirección usando OpenStreetMap Nominatim con estrategia de reintentos en cascada (Fallbacks)
+async function geocodeAddress(address) {
+    const formatted = formatColombianAddress(address);
+    console.log(`📡 [Geocoder] Iniciando geocodificación Nivel 1: "${formatted}"`);
+    
+    // Nivel 1: Intento con la dirección completa formateada
+    let result = await queryNominatim(formatted);
+    if (result) return result;
+    
+    // Nivel 2: Si tiene número de puerta, intentar sin él (buscar la esquina/cruce)
+    // Ejemplo: "Calle 34A sur # 97F - 12" -> "Calle 34A sur # 97F"
+    if (formatted.includes("-")) {
+        const parts = formatted.split("-");
+        const queryWithoutDoor = parts[0].replace(/#\s*$/, '').trim();
+        console.log(`📡 [Geocoder] Re-intentando Nivel 2 (Sin número de puerta): "${queryWithoutDoor}"`);
+        result = await queryNominatim(queryWithoutDoor);
+        if (result) return result;
+    }
+    
+    // Nivel 3: Si tiene nomenclatura con "#", intentar solo con la calle principal
+    // Ejemplo: "Calle 34A sur # 97F" -> "Calle 34A sur"
+    if (formatted.includes("#")) {
+        const parts = formatted.split("#");
+        const queryStreetOnly = parts[0].trim();
+        console.log(`📡 [Geocoder] Re-intentando Nivel 3 (Solo calle principal): "${queryStreetOnly}"`);
+        result = await queryNominatim(queryStreetOnly);
+        if (result) return result;
+    }
+    
+    return null;
 }
 
 // Reversar geocodificación usando OpenStreetMap Nominatim
