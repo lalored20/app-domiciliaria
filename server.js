@@ -730,7 +730,7 @@ function startBackgroundGeocoding() {
             const geocodedIds = metaRows ? metaRows.map(r => r.order_id) : [];
             
             // 2. Buscar una orden en local_orders (chatbot db) que no esté en la lista de geocodificados
-            let query = `SELECT id, clientAddress FROM local_orders`;
+                        let query = `SELECT id, clientAddress FROM local_orders`;
             let params = [];
             
             if (geocodedIds.length > 0) {
@@ -738,7 +738,7 @@ function startBackgroundGeocoding() {
                 query += ` WHERE id NOT IN (${placeholders})`;
                 params = geocodedIds;
             }
-            query += ` LIMIT 1`;
+            query += ` ORDER BY created_at DESC LIMIT 1`;
             
             chatbotDb.all(query, params, (err, rows) => {
                 if (err) {
