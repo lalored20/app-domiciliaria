@@ -181,6 +181,8 @@ async function initApp() {
         renderContent();
     }
 
+    initSwipeNavigation();
+
     setInterval(runBackgroundSync, 10000);
     runBackgroundSync();
 
@@ -599,6 +601,24 @@ function createDeliveryCard(d) {
 
     const isWarningAddress = d.address === 'Recogida WhatsApp';
 
+    // Contar cuántos servicios tiene el mismo cliente hoy en el mismo/otro estado
+    const siblingDeliveries = deliveries.filter(item => 
+        item.order_date === d.order_date && 
+        item.client_phone === d.client_phone
+    );
+    const siblingCount = siblingDeliveries.length;
+    let siblingBadgeHtml = "";
+    if (siblingCount > 1) {
+        const pend = siblingDeliveries.filter(item => item.status === 'PENDIENTE').length;
+        const route = siblingDeliveries.filter(item => item.status === 'EN_RUTA').length;
+        const deliv = siblingDeliveries.filter(item => item.status === 'ENTREGADO').length;
+        siblingBadgeHtml = `
+            <div class="sibling-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 4px 8px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 6px; color: var(--warning); font-size: 11px; font-weight: 700; display: block; line-height: 1.3;">
+                ⚠️ ${siblingCount} servicios hoy: ${pend} Pend. / ${route} Ruta / ${deliv} Entr.
+            </div>
+        `;
+    }
+
     card.innerHTML = `
         <div class="card-header">
             <div style="display:flex; align-items:center; gap:8px;">
@@ -618,6 +638,7 @@ function createDeliveryCard(d) {
             <div style="font-size:12px; font-weight:600; color:var(--secondary); margin-bottom: 2px;">
                 ${prendasText}
             </div>
+            ${siblingBadgeHtml}
             ${itemsDetailHtml}
             <div class="address-box">
                 <svg width="14" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -655,7 +676,7 @@ function createDeliveryCard(d) {
         }
 
         actions.innerHTML = `
-            <button class="btn btn-maps" onclick="openMaps('${d.address}')">
+            <button class="btn btn-maps" onclick="openMaps('${d.id}')">
                 🗺️ Maps / Waze
             </button>
             <button class="btn btn-chat" onclick="toggleWhatsappTemplatesDropdown(event, '${d.id}')" style="position:relative;">
@@ -1198,8 +1219,15 @@ async function startRoute(id) {
     }
 }
 
-function openMaps(address) {
-    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+function openMaps(id) {
+    const d = deliveries.find(item => item.id === id);
+    if (!d) return;
+    
+    let query = d.address;
+    if (d.latitude && d.longitude) {
+        query = `${d.latitude},${d.longitude}`;
+    }
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
     window.open(url, '_blank');
 }
 
@@ -2257,6 +2285,66 @@ function renderLocalidades() {
     
     // Inicializar el estado de las flechas
     setTimeout(updateLocalidadArrows, 100);
+}
+
+let touchStartX = 0;
+let touchEndX = 0;
+let touchStartY = 0;
+let touchEndY = 0;
+
+function initSwipeNavigation() {
+    const container = document.getElementById("main-app-content");
+    if (!container) return;
+
+    // Detectar inicio de toque
+    container.addEventListener('touchstart', e => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    // Detectar fin de toque
+    container.addEventListener('touchend', e => {
+        touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
+        handleSwipeGesture();
+    }, { passive: true });
+}
+
+function handleSwipeGesture() {
+    const swipeThreshold = 80; // Distancia mínima en píxeles para detectar swipe
+    const verticalThreshold = 40; // Ignorar si se desliza demasiado en vertical (ej. scrolling)
+    
+    const diffX = touchEndX - touchStartX;
+    const diffY = touchEndY - touchStartY;
+    
+    if (Math.abs(diffY) > verticalThreshold) return; // Movimiento principalmente vertical
+    if (Math.abs(diffX) < swipeThreshold) return;
+
+    // Obtener todas las pestañas de localidad
+    const tabs = Array.from(document.querySelectorAll('.localidad-selector .tab'));
+    if (tabs.length <= 1) return;
+
+    const activeIndex = tabs.findIndex(t => t.classList.contains('active'));
+    if (activeIndex === -1) return;
+
+    let targetIndex = -1;
+    if (diffX < 0) {
+        // Deslizar a la izquierda -> Siguiente tab (derecha)
+        if (activeIndex < tabs.length - 1) {
+            targetIndex = activeIndex + 1;
+        }
+    } else {
+        // Deslizar a la derecha -> Tab anterior (izquierda)
+        if (activeIndex > 0) {
+            targetIndex = activeIndex - 1;
+        }
+    }
+
+    if (targetIndex !== -1) {
+        const targetTab = tabs[targetIndex];
+        // Simular click
+        targetTab.click();
+    }
 }
 
 window.addEventListener("DOMContentLoaded", initApp);

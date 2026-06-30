@@ -353,6 +353,7 @@ function getMergedDeliveries() {
                     o.updated_at,
                     (SELECT SUM(quantity) FROM local_order_items WHERE orderId = o.id) as items_count
                 FROM local_orders o
+                WHERE o.id NOT LIKE 'test_%' AND o.id NOT LIKE 'web_%'
             `, [], (err, chatbotOrders) => {
                 if (err) {
                     return reject(err);
