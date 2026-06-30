@@ -84,7 +84,24 @@ function extractLocalidad(osmAddress) {
 function geocodeAddress(address) {
     return new Promise((resolve) => {
         let query = address;
+        // Eliminar apartamentos, casas, etc.
         query = query.replace(/(apto|apartamento|casa|piso|bloque|conjunto|interior|torre|barrio).*$/i, '').trim();
+        
+        // Reemplazar palabras de número en español
+        query = query.replace(/n[uú]mero\s*/ig, ' ');
+        query = query.replace(/nro\.?\s*/ig, ' ');
+        query = query.replace(/\bno\.?\s*(?=\d)/ig, ' ');
+        query = query.replace(/\bno\s+(?=\d)/ig, ' ');
+        
+        // Normalizar espaciado de letras y bis comunes en Bogotá
+        query = query.replace(/\s+A\s+/ig, 'a ');
+        query = query.replace(/\s+B\s+/ig, 'b ');
+        query = query.replace(/\s+C\s+/ig, 'c ');
+        query = query.replace(/\s+D\s+/ig, 'd ');
+        query = query.replace(/\s+F\s+/ig, 'f ');
+        query = query.replace(/\s+Bis\s+/ig, 'bis ');
+        
+        query = query.trim();
         
         if (!query.toLowerCase().includes("bogota")) {
             query += ", Bogota, Colombia";
@@ -771,11 +788,26 @@ function startBackgroundGeocoding() {
                     return;
                 }
 
-                // 3. Si la dirección es de tipo "Ubicación GPS: lat, lon"
+                // 3. Si la dirección es de tipo "Ubicación GPS: lat, lon" o un enlace a Google Maps con coordenadas
+                let lat = null;
+                let lon = null;
+                let isGps = false;
+
                 const gpsMatch = address.match(/Ubicación GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/i);
                 if (gpsMatch) {
-                    const lat = parseFloat(gpsMatch[1]);
-                    const lon = parseFloat(gpsMatch[2]);
+                    lat = parseFloat(gpsMatch[1]);
+                    lon = parseFloat(gpsMatch[2]);
+                    isGps = true;
+                } else {
+                    const mapsMatch = address.match(/(?:google\..*maps.*[?&]q=|maps\..*[?&]q=)(-?\d+\.\d+),\s*(-?\d+\.\d+)/i);
+                    if (mapsMatch) {
+                        lat = parseFloat(mapsMatch[1]);
+                        lon = parseFloat(mapsMatch[2]);
+                        isGps = true;
+                    }
+                }
+
+                if (isGps) {
                     console.log(`📡 [Geocoder] Detectada ubicación GPS: (${lat}, ${lon}) para orden ${order.id}. Realizando geocodificación inversa...`);
                     
                     reverseGeocode(lat, lon).then(result => {
