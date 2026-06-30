@@ -2124,15 +2124,30 @@ async function runBackgroundSync() {
                             if (!localItem) {
                                 await db.deliveries.put(serverD);
                                 updatedCount++;
-                            } else if (!localItem.sync_pending && (
-                                localItem.status !== serverD.status ||
-                                localItem.latitude !== serverD.latitude ||
-                                localItem.longitude !== serverD.longitude ||
-                                localItem.address !== serverD.address ||
-                                localItem.localidad !== serverD.localidad
-                            )) {
-                                await db.deliveries.put(serverD);
-                                updatedCount++;
+                            } else {
+                                let localChanged = false;
+                                // Actualizar estado solo si local no tiene cambios de estado pendientes
+                                if (!localItem.sync_pending && localItem.status !== serverD.status) {
+                                    localItem.status = serverD.status;
+                                    localChanged = true;
+                                }
+                                // Actualizar geolocalización, dirección y localidad resueltas siempre
+                                if (serverD.latitude && serverD.longitude && (
+                                    localItem.latitude !== serverD.latitude ||
+                                    localItem.longitude !== serverD.longitude ||
+                                    localItem.address !== serverD.address ||
+                                    localItem.localidad !== serverD.localidad
+                                )) {
+                                    localItem.latitude = serverD.latitude;
+                                    localItem.longitude = serverD.longitude;
+                                    localItem.address = serverD.address;
+                                    localItem.localidad = serverD.localidad;
+                                    localChanged = true;
+                                }
+                                if (localChanged) {
+                                    await db.deliveries.put(localItem);
+                                    updatedCount++;
+                                }
                             }
                         }
                         
