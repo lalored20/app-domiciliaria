@@ -68,18 +68,29 @@ function getLocalidadCenterCoords(localidad) {
     return coords[localidad] || coords["Usaquén"];
 }
 
+// Extraer la localidad de Bogotá a partir del objeto de dirección de OpenStreetMap
+function extractLocalidad(osmAddress) {
+    const localities = ["Usaquén", "Suba", "Chapinero", "Teusaquillo", "Barrios Unidos", "Engativá", "Fontibón", "Kennedy", "Bosa", "Puente Aranda", "Usme", "Ciudad Bolívar", "San Cristóbal", "Rafael Uribe Uribe", "Tunjuelito", "Antonio Nariño", "Santa Fe", "Los Mártires", "La Candelaria", "Sumapaz"];
+    const fields = [osmAddress.city_district, osmAddress.suburb, osmAddress.borough, osmAddress.town, osmAddress.neighbourhood, osmAddress.city];
+    for (const val of fields) {
+        if (!val) continue;
+        const matched = localities.find(loc => val.toLowerCase().includes(loc.toLowerCase()) || loc.toLowerCase().includes(val.toLowerCase()));
+        if (matched) return matched;
+    }
+    return null;
+}
+
 // Geocodificar dirección usando OpenStreetMap Nominatim
 function geocodeAddress(address) {
     return new Promise((resolve) => {
         let query = address;
-        // Limpiar indicaciones comunes para mejorar la geocodificación
         query = query.replace(/(apto|apartamento|casa|piso|bloque|conjunto|interior|torre|barrio).*$/i, '').trim();
         
         if (!query.toLowerCase().includes("bogota")) {
             query += ", Bogota, Colombia";
         }
         
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=1`;
         
         const options = {
             headers: {
@@ -94,9 +105,49 @@ function geocodeAddress(address) {
                 try {
                     const results = JSON.parse(data);
                     if (results && results.length > 0) {
+                        const first = results[0];
+                        const loc = extractLocalidad(first.address || {});
                         resolve({
-                            lat: parseFloat(results[0].lat),
-                            lon: parseFloat(results[0].lon)
+                            lat: parseFloat(first.lat),
+                            lon: parseFloat(first.lon),
+                            display_name: first.display_name,
+                            localidad: loc
+                        });
+                    } else {
+                        resolve(null);
+                    }
+                } catch (e) {
+                    resolve(null);
+                }
+            });
+        }).on('error', () => {
+            resolve(null);
+        });
+    });
+}
+
+// Reversar geocodificación usando OpenStreetMap Nominatim
+function reverseGeocode(lat, lon) {
+    return new Promise((resolve) => {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`;
+        
+        const options = {
+            headers: {
+                'User-Agent': 'AppDomiciliaria/1.0 (lalored20@app-domiciliaria.com)'
+            }
+        };
+
+        https.get(url, options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const result = JSON.parse(data);
+                    if (result && result.address) {
+                        const loc = extractLocalidad(result.address);
+                        resolve({
+                            display_name: result.display_name,
+                            localidad: loc
                         });
                     } else {
                         resolve(null);
@@ -144,6 +195,13 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
                 delivery_date TEXT,
                 updated_at INTEGER
             )`);
+
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN resolved_address TEXT`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN resolved_localidad TEXT`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
             
             appDb.run(`CREATE TABLE IF NOT EXISTS shift_state (
                 id TEXT PRIMARY KEY,
@@ -161,7 +219,26 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
 });
 
 // Clasificación básica de Localidades
-function detectarLocalidad(direccion) {
+function detectarLocalidad(direccion, lat, lon) {
+    if (lat && lon) {
+        const latitude = parseFloat(lat);
+        const longitude = parseFloat(lon);
+        if (latitude < 4.59) {
+            return "Usme";
+        }
+        if (latitude > 4.69) {
+            if (longitude > -74.05) return "Usaquén";
+            return "Suba";
+        }
+        if (latitude >= 4.59 && latitude <= 4.69) {
+            if (longitude > -74.06) return "Chapinero";
+            if (longitude <= -74.06 && longitude > -74.09) return "Teusaquillo";
+            if (longitude <= -74.09 && longitude > -74.13) return "Kennedy";
+            return "Bosa";
+        }
+    }
+
+    if (!direccion) return "Usaquén";
     const dirUpper = direccion.toUpperCase();
     if (dirUpper.includes("USAQUEN") || dirUpper.includes("CEDRITOS") || dirUpper.includes("SANTA BARBARA") || dirUpper.includes("CANTALEJO")) {
         return "Usaquén";
@@ -184,7 +261,7 @@ function detectarLocalidad(direccion) {
     if (dirUpper.includes("FONTIBON") || dirUpper.includes("MODELIA") || dirUpper.includes("HAYUELOS") || dirUpper.includes("ZONA FRANCA")) {
         return "Fontibón";
     }
-    if (dirUpper.includes("KENNEDY") || dirUpper.includes("CASTILLA") || dirUpper.includes("AMERICAS") || dirUpper.includes("TINTAL")) {
+    if (dirUpper.includes("KENNEDY") || dirUpper.includes("CASTILLA") || dirUpper.includes("AMERICAS") || dirUpper.includes("TINTAL") || dirUpper.includes("TIERRA BUENA") || dirUpper.includes("TIERRABUENA") || dirUpper.includes("PATIO BONITO")) {
         return "Kennedy";
     }
     if (dirUpper.includes("BOSA") || dirUpper.includes("RECREO")) {
@@ -192,6 +269,15 @@ function detectarLocalidad(direccion) {
     }
     if (dirUpper.includes("PUENTE ARANDA") || dirUpper.includes("SALAZAR GOMEZ") || dirUpper.includes("MUZU")) {
         return "Puente Aranda";
+    }
+    if (dirUpper.includes("USME") || dirUpper.includes("SAN ANTONIO ELIAS") || dirUpper.includes("SAN ANTONIO")) {
+        return "Usme";
+    }
+    if (dirUpper.includes("CIUDAD BOLIVAR") || dirUpper.includes("MADRIGAL")) {
+        return "Ciudad Bolívar";
+    }
+    if (dirUpper.includes("SAN CRISTOBAL") || dirUpper.includes("20 DE JULIO")) {
+        return "San Cristóbal";
     }
     return "Usaquén"; 
 }
@@ -246,8 +332,8 @@ function getMergedDeliveries() {
                         ticket_number: o.ticketNumber,
                         client_name: o.clientName,
                         client_phone: o.clientPhone.replace(/\D/g, ''),
-                        address: o.clientAddress,
-                        localidad: detectarLocalidad(o.clientAddress),
+                        address: meta.resolved_address || o.clientAddress,
+                        localidad: meta.resolved_localidad || detectarLocalidad(meta.resolved_address || o.clientAddress, meta.latitude, meta.longitude),
                         time_window: meta.time_window || "10:00 - 12:00",
                         amount: o.totalValue,
                         pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
@@ -675,39 +761,71 @@ function startBackgroundGeocoding() {
                     appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
                         if (err) return;
                         if (meta) {
-                            appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, nowEpoch, order.id]);
+                            appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', nowEpoch, order.id]);
                         } else {
-                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?)`, [order.id, baseLat, baseLng, getColombiaDateString(), nowEpoch]);
+                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', getColombiaDateString(), nowEpoch]);
                         }
                     });
                     return;
                 }
 
-                console.log(`📡 [Geocoder] Intentando geolocalizar dirección: "${address}" para orden ${order.id}...`);
+                // 3. Si la dirección es de tipo "Ubicación GPS: lat, lon"
+                const gpsMatch = address.match(/Ubicación GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/i);
+                if (gpsMatch) {
+                    const lat = parseFloat(gpsMatch[1]);
+                    const lon = parseFloat(gpsMatch[2]);
+                    console.log(`📡 [Geocoder] Detectada ubicación GPS: (${lat}, ${lon}) para orden ${order.id}. Realizando geocodificación inversa...`);
+                    
+                    reverseGeocode(lat, lon).then(result => {
+                        const nowEpoch = Math.floor(Date.now() / 1000);
+                        const resolvedAddress = result ? result.display_name : `Ubicación GPS: ${lat}, ${lon}`;
+                        const resolvedLocalidad = result && result.localidad ? result.localidad : detectarLocalidad(address, lat, lon);
+                        
+                        console.log(`✅ [Geocoder] Ubicación GPS resuelta: "${resolvedAddress}" [${resolvedLocalidad}]`);
+                        
+                        appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
+                            if (err) return;
+                            if (meta) {
+                                appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [lat, lon, resolvedAddress, resolvedLocalidad, nowEpoch, order.id]);
+                            } else {
+                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, lat, lon, resolvedAddress, resolvedLocalidad, getColombiaDateString(), nowEpoch]);
+                            }
+                        });
+                    });
+                    return;
+                }
+
+                // 4. Dirección normal de texto
+                console.log(`📡 [Geocoder] Intentando geolocalizar dirección de texto: "${address}" para orden ${order.id}...`);
                 geocodeAddress(address).then(coords => {
                     const nowEpoch = Math.floor(Date.now() / 1000);
                     let finalLat = coords ? coords.lat : null;
                     let finalLon = coords ? coords.lon : null;
+                    let resolvedAddress = coords ? coords.display_name : address;
+                    let resolvedLocalidad = coords ? coords.localidad : null;
                     
                     if (!finalLat || !finalLon) {
-                        const localidad = detectarLocalidad(address);
-                        const fallback = getLocalidadCenterCoords(localidad);
+                        resolvedLocalidad = detectarLocalidad(address);
+                        const fallback = getLocalidadCenterCoords(resolvedLocalidad);
                         finalLat = fallback.lat;
                         finalLon = fallback.lon;
-                        console.log(`⚠️ [Geocoder] No se pudo encontrar coordenadas para "${address}". Asignando centro de ${localidad}: (${finalLat}, ${finalLon})`);
+                        console.log(`⚠️ [Geocoder] No se pudo encontrar coordenadas para "${address}". Asignando centro de ${resolvedLocalidad}: (${finalLat}, ${finalLon})`);
                     } else {
-                        console.log(`✅ [Geocoder] Geolocalizado con éxito: (${finalLat}, ${finalLon})`);
+                        if (!resolvedLocalidad) {
+                            resolvedLocalidad = detectarLocalidad(resolvedAddress, finalLat, finalLon);
+                        }
+                        console.log(`✅ [Geocoder] Geolocalizado con éxito: "${resolvedAddress}" (${finalLat}, ${finalLon}) [${resolvedLocalidad}]`);
                     }
 
                     // Guardar/Actualizar en domiciliaria.db de forma segura
                     appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
                         if (err) return;
                         if (meta) {
-                            appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, updated_at = ? WHERE order_id = ?`, [finalLat, finalLon, nowEpoch, order.id], (err) => {
+                            appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [finalLat, finalLon, resolvedAddress, resolvedLocalidad, nowEpoch, order.id], (err) => {
                                 if (err) console.error("❌ [Geocoder] Error al actualizar coordenadas:", err.message);
                             });
                         } else {
-                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?)`, [order.id, finalLat, finalLon, getColombiaDateString(), nowEpoch], (err) => {
+                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, getColombiaDateString(), nowEpoch], (err) => {
                                 if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
                             });
                         }
