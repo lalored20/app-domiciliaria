@@ -13,7 +13,11 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
-// Servir archivos estáticos del Frontend (index.html, app.js, styles.css)
+// Servir archivos estáticos del Frontend (index.html, app.js, styles.css) con Cache-Control deshabilitado para desarrollo
+app.use((req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    next();
+});
 app.use(express.static(path.join(__dirname)));
 
 // Configuración de Supabase opcional
