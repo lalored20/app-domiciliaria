@@ -2185,6 +2185,25 @@ function renderTabs() {
     `;
 }
 
+function scrollLocalidades(direction) {
+    const selector = document.getElementById("localidad-selector");
+    if (selector) {
+        selector.scrollBy({ left: direction * 150, behavior: 'smooth' });
+        setTimeout(updateLocalidadArrows, 300);
+    }
+}
+
+function updateLocalidadArrows() {
+    const selector = document.getElementById("localidad-selector");
+    const arrowLeft = document.getElementById("loc-arrow-left");
+    const arrowRight = document.getElementById("loc-arrow-right");
+    if (!selector || !arrowLeft || !arrowRight) return;
+    
+    arrowLeft.disabled = selector.scrollLeft <= 5;
+    const isEnd = selector.scrollLeft + selector.clientWidth >= selector.scrollWidth - 5;
+    arrowRight.disabled = isEnd;
+}
+
 function renderLocalidades() {
     const selector = document.querySelector(".localidad-selector");
     if (!selector) return;
@@ -2197,6 +2216,9 @@ function renderLocalidades() {
     if (localidades.length === 0) {
         localidades.push("Usaquén");
     }
+
+    // Ordenar las localidades alfabéticamente
+    localidades.sort((a, b) => a.localeCompare(b));
 
     // Asegurarse de que la localidad seleccionada actualmente tenga pedidos hoy,
     // de lo contrario, preseleccionar la primera localidad que sí tenga entregas.
@@ -2213,9 +2235,20 @@ function renderLocalidades() {
         const tab = document.createElement("div");
         tab.className = `tab ${active}`;
         tab.textContent = `${loc} (${count})`;
-        tab.onclick = () => selectLocalidadTab(tab, loc);
+        tab.onclick = () => {
+            selectLocalidadTab(tab, loc);
+            tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            setTimeout(updateLocalidadArrows, 300);
+        };
         selector.appendChild(tab);
     });
+
+    // Agregar listener de scroll para actualizar el estado de las flechas
+    selector.removeEventListener("scroll", updateLocalidadArrows);
+    selector.addEventListener("scroll", updateLocalidadArrows);
+    
+    // Inicializar el estado de las flechas
+    setTimeout(updateLocalidadArrows, 100);
 }
 
 window.addEventListener("DOMContentLoaded", initApp);

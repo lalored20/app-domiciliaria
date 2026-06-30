@@ -68,9 +68,13 @@
                 </div>
             </div>
 
-            <!-- Selector Horizontal de Localidades -->
-            <div class="localidad-selector">
-                <!-- Se llena dinámicamente mediante app.js -->
+            <!-- Selector Horizontal de Localidades con Flechas -->
+            <div class="localidad-nav-wrapper">
+                <button class="localidad-arrow localidad-arrow-left" id="loc-arrow-left" onclick="scrollLocalidades(-1)">‹</button>
+                <div class="localidad-selector" id="localidad-selector">
+                    <!-- Se llena dinámicamente mediante app.js -->
+                </div>
+                <button class="localidad-arrow localidad-arrow-right" id="loc-arrow-right" onclick="scrollLocalidades(1)">›</button>
             </div>
         </header>
 
