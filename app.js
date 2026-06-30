@@ -621,6 +621,7 @@ function createDeliveryCard(d) {
     // Contar cuántos servicios tiene el mismo cliente hoy en el mismo/otro estado
     const siblingDeliveries = deliveries.filter(item => 
         item.order_date === d.order_date && 
+        item.client_name === d.client_name &&
         item.client_phone === d.client_phone
     );
     const siblingCount = siblingDeliveries.length;
@@ -675,11 +676,8 @@ function createDeliveryCard(d) {
     let addressWarningHtml = "";
     if (uniqueLocations.length > 1) {
         addressWarningHtml = `
-            <div class="address-warning-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 6px 10px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; color: #f87171; font-size: 11px; font-weight: 600; display: block; line-height: 1.4;">
-                ⚠️ <strong>Direcciones distintas hoy:</strong>
-                <ul style="margin: 4px 0 0 12px; padding: 0; list-style-type: disc;">
-                    ${uniqueLocations.map(loc => `<li>${loc.display}</li>`).join('')}
-                </ul>
+            <div class="address-warning-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 4px 8px; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.15); border-radius: 6px; color: var(--warning); font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; line-height: 1.3;">
+                ⚠️ Tiene otro servicio en una dirección diferente hoy
             </div>
         `;
     }
@@ -1749,6 +1747,58 @@ function openChatTranscriptionModal(id) {
     const d = deliveries.find(item => item.id === id);
     if (!d) return;
 
+    // Calcular las ubicaciones únicas de este cliente hoy
+    const siblingDeliveries = deliveries.filter(item => 
+        item.order_date === d.order_date && 
+        item.client_name === d.client_name &&
+        item.client_phone === d.client_phone
+    );
+    const uniqueLocations = [];
+    siblingDeliveries.forEach(item => {
+        if (item.address === 'Recogida WhatsApp') return;
+        let isNew = true;
+        for (const loc of uniqueLocations) {
+            if (item.latitude && item.longitude && loc.latitude && loc.longitude) {
+                const latDiff = Math.abs(item.latitude - loc.latitude);
+                const lngDiff = Math.abs(item.longitude - loc.longitude);
+                if (latDiff < 0.002 && lngDiff < 0.002) {
+                    isNew = false;
+                    break;
+                }
+            } else {
+                const cleanA = (item.raw_address || item.address || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+                const cleanB = (loc.display || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
+                    isNew = false;
+                    break;
+                }
+            }
+        }
+        if (isNew) {
+            let displayAddress = item.raw_address || item.address;
+            if (displayAddress && displayAddress.includes(",")) {
+                displayAddress = displayAddress.split(",")[0].trim();
+            }
+            uniqueLocations.push({
+                display: displayAddress,
+                latitude: item.latitude,
+                longitude: item.longitude
+            });
+        }
+    });
+
+    let addressesWarningHtml = "";
+    if (uniqueLocations.length > 1) {
+        addressesWarningHtml = `
+            <div style="margin-top: 8px; margin-bottom: 8px; padding: 8px 10px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 6px; color: #f87171; font-size: 11px;">
+                ⚠️ <strong>¡Atención repartidor! Direcciones distintas programadas para hoy:</strong>
+                <ul style="margin: 4px 0 0 12px; padding: 0; list-style-type: disc;">
+                    ${uniqueLocations.map(loc => `<li>${loc.display}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
     document.getElementById('chat-modal-title').textContent = `Pedido #${d.ticket_number || 'N/A'}`;
     
     // Status pill style
@@ -1794,6 +1844,7 @@ function openChatTranscriptionModal(id) {
     const summaryBoxHtml = `
         <div class="summary-route-box" style="margin-bottom: 12px; padding: 10px; background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 8px; font-size: 12px; color: var(--text-main); line-height: 1.4;">
             <div style="font-weight: 700; color: var(--primary); margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">📌 RESUMEN CRÍTICO PARA RUTA</div>
+            ${addressesWarningHtml}
             <div style="margin-bottom: 6px;"><strong>📍 Dirección original:</strong> ${escapeHtml(d.raw_address || d.address)}</div>
             <div style="margin-bottom: 6px;"><strong>👔 Prendas y servicios contratados:</strong>
                 ${d.items && d.items.length > 0 
