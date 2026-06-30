@@ -313,73 +313,96 @@ function detectarLocalidad(direccion, lat, lon) {
 // Helper to get merged deliveries from SQLite databases
 function getMergedDeliveries() {
     return new Promise((resolve, reject) => {
-        chatbotDb.all(`
-            SELECT 
-                o.id, 
-                o.ticketNumber, 
-                o.status, 
-                o.location, 
-                o.totalValue, 
-                o.paidAmount, 
-                o.paymentStatus, 
-                o.scheduledDate, 
-                o.clientName, 
-                o.clientPhone, 
-                o.clientAddress,
-                o.chatTranscription,
-                o.paymentDetails,
-                o.created_at,
-                o.updated_at,
-                (SELECT SUM(quantity) FROM local_order_items WHERE orderId = o.id) as items_count
-            FROM local_orders o
-        `, [], (err, chatbotOrders) => {
+        // Consultar los ítems detallados de los pedidos en messages.db
+        chatbotDb.all(`SELECT id, orderId, quantity, type, price FROM local_order_items`, [], (err, itemRows) => {
             if (err) {
                 return reject(err);
             }
             
-            appDb.all(`SELECT * FROM delivery_metadata`, [], (err, metadataRows) => {
+            const itemsMap = {};
+            if (itemRows) {
+                itemRows.forEach(item => {
+                    if (!itemsMap[item.orderId]) {
+                        itemsMap[item.orderId] = [];
+                    }
+                    itemsMap[item.orderId].push({
+                        id: item.id,
+                        quantity: item.quantity,
+                        type: item.type,
+                        price: item.price
+                    });
+                });
+            }
+
+            chatbotDb.all(`
+                SELECT 
+                    o.id, 
+                    o.ticketNumber, 
+                    o.status, 
+                    o.location, 
+                    o.totalValue, 
+                    o.paidAmount, 
+                    o.paymentStatus, 
+                    o.scheduledDate, 
+                    o.clientName, 
+                    o.clientPhone, 
+                    o.clientAddress,
+                    o.chatTranscription,
+                    o.paymentDetails,
+                    o.created_at,
+                    o.updated_at,
+                    (SELECT SUM(quantity) FROM local_order_items WHERE orderId = o.id) as items_count
+                FROM local_orders o
+            `, [], (err, chatbotOrders) => {
                 if (err) {
                     return reject(err);
                 }
                 
-                const metadataMap = {};
-                metadataRows.forEach(row => {
-                    metadataMap[row.order_id] = row;
-                });
-                
-                const merged = chatbotOrders.map(o => {
-                    const meta = metadataMap[o.id] || {};
-                    // Convert unix epoch to YYYY-MM-DD in Colombia timezone
-                    const dateStr = epochToColombiaDateString(o.created_at);
-                    const expectedItems = meta.expected_items !== undefined ? meta.expected_items : (o.items_count || 1);
+                appDb.all(`SELECT * FROM delivery_metadata`, [], (err, metadataRows) => {
+                    if (err) {
+                        return reject(err);
+                    }
                     
-                    return {
-                        id: o.id,
-                        chatbot_order_id: o.id,
-                        ticket_number: o.ticketNumber,
-                        client_name: o.clientName,
-                        client_phone: o.clientPhone.replace(/\D/g, ''),
-                        address: meta.resolved_address || o.clientAddress,
-                        localidad: meta.resolved_localidad || detectarLocalidad(meta.resolved_address || o.clientAddress, meta.latitude, meta.longitude),
-                        time_window: meta.time_window || "10:00 - 12:00",
-                        amount: o.totalValue,
-                        pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
-                        status: o.status || 'PENDIENTE',
-                        qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
-                        expected_items: expectedItems,
-                        collected_items: meta.collected_items !== undefined ? meta.collected_items : expectedItems,
-                        evidence_photo: meta.evidence_photo || null,
-                        signature_drawn: meta.signature_drawn === 1,
-                        order_date: meta.delivery_date || o.scheduledDate || dateStr,
-                        sync_pending: false,
-                        latitude: meta.latitude || null,
-                        longitude: meta.longitude || null,
-                        chat_transcription: o.chatTranscription || null,
-                        payment_details: o.paymentDetails || null
-                    };
+                    const metadataMap = {};
+                    metadataRows.forEach(row => {
+                        metadataMap[row.order_id] = row;
+                    });
+                    
+                    const merged = chatbotOrders.map(o => {
+                        const meta = metadataMap[o.id] || {};
+                        // Convert unix epoch to YYYY-MM-DD in Colombia timezone
+                        const dateStr = epochToColombiaDateString(o.created_at);
+                        const expectedItems = meta.expected_items !== undefined ? meta.expected_items : (o.items_count || 1);
+                        
+                        return {
+                            id: o.id,
+                            chatbot_order_id: o.id,
+                            ticket_number: o.ticketNumber,
+                            client_name: o.clientName,
+                            client_phone: o.clientPhone.replace(/\D/g, ''),
+                            address: meta.resolved_address || o.clientAddress,
+                            raw_address: o.clientAddress,
+                            localidad: meta.resolved_localidad || detectarLocalidad(meta.resolved_address || o.clientAddress, meta.latitude, meta.longitude),
+                            time_window: meta.time_window || "10:00 - 12:00",
+                            amount: o.totalValue,
+                            pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
+                            status: o.status || 'PENDIENTE',
+                            qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
+                            expected_items: expectedItems,
+                            collected_items: meta.collected_items !== undefined ? meta.collected_items : expectedItems,
+                            evidence_photo: meta.evidence_photo || null,
+                            signature_drawn: meta.signature_drawn === 1,
+                            order_date: meta.delivery_date || o.scheduledDate || dateStr,
+                            sync_pending: false,
+                            latitude: meta.latitude || null,
+                            longitude: meta.longitude || null,
+                            chat_transcription: o.chatTranscription || null,
+                            items: itemsMap[o.id] || []
+                        };
+                    });
+                    
+                    resolve(merged);
                 });
-                
-                resolve(merged);
             });
         });
     });
@@ -801,18 +824,13 @@ function startBackgroundGeocoding() {
                 let lon = null;
                 let isGps = false;
 
-                const gpsMatch = address.match(/Ubicación GPS:\s*(-?\d+\.\d+),\s*(-?\d+\.\d+)/i);
-                if (gpsMatch) {
-                    lat = parseFloat(gpsMatch[1]);
-                    lon = parseFloat(gpsMatch[2]);
+                                const genericMatch = address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+                const isUrlOrGps = address.toLowerCase().includes("maps") || address.toLowerCase().includes("gps") || address.startsWith("http") || address.includes("Ubicación");
+                
+                if (genericMatch && (isUrlOrGps || address.length < 50)) {
+                    lat = parseFloat(genericMatch[1]);
+                    lon = parseFloat(genericMatch[2]);
                     isGps = true;
-                } else {
-                    const mapsMatch = address.match(/(?:google\..*maps.*[?&]q=|maps\..*[?&]q=)(-?\d+\.\d+),\s*(-?\d+\.\d+)/i);
-                    if (mapsMatch) {
-                        lat = parseFloat(mapsMatch[1]);
-                        lon = parseFloat(mapsMatch[2]);
-                        isGps = true;
-                    }
                 }
 
                 if (isGps) {
