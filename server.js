@@ -500,7 +500,122 @@ function getMergedDeliveries() {
                         };
                     });
                     
-                    resolve(merged);
+                    // Simular pedidos precisos para mañana (2026-07-01) para pruebas de ruta
+                    const tomorrowDate = "2026-07-01";
+                    const mockTomorrowDeliveries = [
+                        {
+                            id: "mock-tomorrow-1",
+                            chatbot_order_id: "mock-tomorrow-1",
+                            ticket_number: "701",
+                            client_name: "Camila Restrepo",
+                            client_phone: "573001234567",
+                            address: "Calle 93 # 12 - 54, Bogotá",
+                            raw_address: "Calle 93 # 12 - 54",
+                            localidad: "Usaquén",
+                            time_window: "08:00 - 10:00",
+                            amount: 45000,
+                            pay_method: "Efectivo",
+                            status: "PENDIENTE",
+                            qr_code: "QR-ORQUIDEAS-701",
+                            expected_items: 3,
+                            collected_items: 3,
+                            evidence_photo: null,
+                            signature_drawn: false,
+                            order_date: tomorrowDate,
+                            sync_pending: false,
+                            latitude: 4.6788,
+                            longitude: -74.0475,
+                            chat_transcription: "[Chat con Camila Restrepo]\nCliente: Hola, me gustaría programar un lavado de prendas para mañana.\nChatbot: Claro, ¿qué prendas tienes?\nCliente: Son 2 sacos y 1 pantalón.\nChatbot: Listo, agendado de 8:00 a 10:00.",
+                            items: [
+                                { type: "Sacos", quantity: 2, price: 15000 },
+                                { type: "Pantalón", quantity: 1, price: 15000 }
+                            ]
+                        },
+                        {
+                            id: "mock-tomorrow-2",
+                            chatbot_order_id: "mock-tomorrow-2",
+                            ticket_number: "901",
+                            client_name: "Diego García",
+                            client_phone: "573178272969",
+                            address: "Carrera 15 # 88 - 21, Bogotá",
+                            raw_address: "Carrera 15 # 88 - 21",
+                            localidad: "Chapinero",
+                            time_window: "10:00 - 12:00",
+                            amount: 65000,
+                            pay_method: "Pagado (Online)",
+                            status: "PENDIENTE",
+                            qr_code: "QR-ORQUIDEAS-901",
+                            expected_items: 2,
+                            collected_items: 2,
+                            evidence_photo: null,
+                            signature_drawn: false,
+                            order_date: tomorrowDate,
+                            sync_pending: false,
+                            latitude: 4.6732,
+                            longitude: -74.0531,
+                            chat_transcription: "[Chat con Diego García]\nCliente: Hola, quiero mandar a lavar unas cosas.\nChatbot: Claro, ¿qué prendas?\nCliente: 1 gabardina y 1 vestido.\nChatbot: Perfecto, programado para mañana en Carrera 15 # 88 - 21 de 10:00 a 12:00.",
+                            items: [
+                                { type: "Gabardina", quantity: 1, price: 35000 },
+                                { type: "Vestido", quantity: 1, price: 30000 }
+                            ]
+                        },
+                        {
+                            id: "mock-tomorrow-3",
+                            chatbot_order_id: "mock-tomorrow-3",
+                            ticket_number: "902",
+                            client_name: "Diego García",
+                            client_phone: "573178272969",
+                            address: "Carrera 15 # 88 - 21, Bogotá",
+                            raw_address: "Carrera 15 # 88 - 21",
+                            localidad: "Chapinero",
+                            time_window: "10:00 - 12:00",
+                            amount: 45000,
+                            pay_method: "Pagado (Online)",
+                            status: "PENDIENTE",
+                            qr_code: "QR-ORQUIDEAS-902",
+                            expected_items: 1,
+                            collected_items: 1,
+                            evidence_photo: null,
+                            signature_drawn: false,
+                            order_date: tomorrowDate,
+                            sync_pending: false,
+                            latitude: 4.6732,
+                            longitude: -74.0531,
+                            chat_transcription: "[Chat con Diego García]\nCliente: Oye, olvide agregar un edredón doble al pedido.\nChatbot: Claro, lo agrego como un servicio separado para mañana mismo en la misma entrega.\nCliente: Gracias.",
+                            items: [
+                                { type: "Edredón doble", quantity: 1, price: 45000 }
+                            ]
+                        },
+                        {
+                            id: "mock-tomorrow-4",
+                            chatbot_order_id: "mock-tomorrow-4",
+                            ticket_number: "903",
+                            client_name: "Diego García",
+                            client_phone: "573178272969",
+                            address: "Calle 116 # 19 - 45, Bogotá",
+                            raw_address: "Calle 116 # 19 - 45",
+                            localidad: "Usaquén",
+                            time_window: "14:00 - 16:00",
+                            amount: 35000,
+                            pay_method: "Efectivo",
+                            status: "PENDIENTE",
+                            qr_code: "QR-ORQUIDEAS-903",
+                            expected_items: 1,
+                            collected_items: 1,
+                            evidence_photo: null,
+                            signature_drawn: false,
+                            order_date: tomorrowDate,
+                            sync_pending: false,
+                            latitude: 4.7001,
+                            longitude: -74.0425,
+                            chat_transcription: "[Chat con Diego García]\nCliente: Buenas, tengo otra prenda pero esta es para entregar en mi oficina en Usaquén por la tarde, Calle 116 # 19 - 45.\nChatbot: De acuerdo, la agendamos de 14:00 a 16:00.",
+                            items: [
+                                { type: "Chaqueta de cuero", quantity: 1, price: 35000 }
+                            ]
+                        }
+                    ];
+                    
+                    resolve(merged.concat(mockTomorrowDeliveries));
                 });
             });
         });
