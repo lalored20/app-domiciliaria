@@ -703,15 +703,15 @@ function createDeliveryCard(d) {
                 <span>${d.client_name}</span>
                 ${d.chat_transcription ? `<button class="btn-chat-info" onclick="openChatTranscriptionModal('${d.id}')" style="background: rgba(92, 212, 255, 0.1); border: 1px solid rgba(92, 212, 255, 0.25); color: #5cd4ff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='rgba(92, 212, 255, 0.2)'" onmouseout="this.style.background='rgba(92, 212, 255, 0.1)'">💬 Detalle</button>` : ''}
             </div>
-            <div style="font-size:12px; font-weight:600; color:var(--secondary); margin-bottom: 2px;">
-                ${prendasText}
+            <div style="font-size:12px; font-weight:600; color:var(--secondary); margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
+                <span>${prendasText}</span>
+                ${siblingCount > 1 ? `<span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">👥 ${siblingCount} pedidos hoy</span>` : ''}
             </div>
-            ${siblingBadgeHtml}
             ${itemsDetailHtml}
             <div class="address-box">
                 <svg width="14" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                <span ${isWarningAddress ? 'style="color: var(--warning); font-weight: 700; background: rgba(239, 68, 68, 0.08); padding: 1px 4px; border-radius: 4px;"' : ''}>
-                    ${isWarningAddress ? '⚠️ ' + formatShortAddress(d.address) : formatShortAddress(d.address)}
+                <span>
+                    ${formatShortAddress(d.address)}
                 </span>
             </div>
         </div>
@@ -1788,7 +1788,7 @@ function openChatTranscriptionModal(id) {
     const d = deliveries.find(item => item.id === id);
     if (!d) return;
 
-    // Calcular las ubicaciones únicas de este cliente hoy
+    // 1. Calcular las ubicaciones de hermanos agendados hoy (excluyendo "Recogida WhatsApp")
     const siblingDeliveries = deliveries.filter(item => 
         item.order_date === d.order_date && 
         item.client_name === d.client_name &&
@@ -1797,19 +1797,21 @@ function openChatTranscriptionModal(id) {
     const uniqueLocations = [];
     siblingDeliveries.forEach(item => {
         if (item.address === 'Recogida WhatsApp') return;
+        
         let isNew = true;
         for (const loc of uniqueLocations) {
+            // Comparar texto simplificado
+            const cleanA = (item.raw_address || item.address || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+            const cleanB = (loc.rawAddress || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
+                isNew = false;
+                break;
+            }
+            // Comparar coordenadas GPS por proximidad
             if (item.latitude && item.longitude && loc.latitude && loc.longitude) {
                 const latDiff = Math.abs(item.latitude - loc.latitude);
                 const lngDiff = Math.abs(item.longitude - loc.longitude);
-                if (latDiff < 0.002 && lngDiff < 0.002) {
-                    isNew = false;
-                    break;
-                }
-            } else {
-                const cleanA = (item.raw_address || item.address || "").toLowerCase().replace(/[^a-z0-9]/g, '');
-                const cleanB = (loc.display || "").toLowerCase().replace(/[^a-z0-9]/g, '');
-                if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
+                if (latDiff < 0.003 && lngDiff < 0.003) {
                     isNew = false;
                     break;
                 }
@@ -1822,88 +1824,118 @@ function openChatTranscriptionModal(id) {
             }
             uniqueLocations.push({
                 display: displayAddress,
+                rawAddress: item.raw_address || item.address,
                 latitude: item.latitude,
                 longitude: item.longitude
             });
         }
     });
 
-    let addressesWarningHtml = "";
-    if (uniqueLocations.length > 1) {
-        addressesWarningHtml = `
-            <div style="margin-top: 8px; margin-bottom: 8px; padding: 8px 10px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 6px; color: #f87171; font-size: 11px;">
-                ⚠️ <strong>¡Atención repartidor! Direcciones distintas programadas para hoy:</strong>
-                <ul style="margin: 4px 0 0 12px; padding: 0; list-style-type: disc;">
+    // 2. Alerta consolidada de ruta
+    let routingHtml = "";
+    if (siblingDeliveries.length > 1) {
+        let addressesListHtml = "";
+        if (uniqueLocations.length > 1) {
+            addressesListHtml = `
+                <div style="margin-top: 6px; font-weight: 700; color: #f87171;">⚠️ Puntos de entrega diferentes para hoy:</div>
+                <ul style="margin: 4px 0 0 12px; padding: 0; list-style-type: disc; color: var(--text-main);">
                     ${uniqueLocations.map(loc => `<li>${loc.display}</li>`).join('')}
                 </ul>
+            `;
+        } else {
+            addressesListHtml = `<div style="margin-top: 4px; color: var(--success); font-weight: 600;">✅ Todos los pedidos corresponden al mismo domicilio.</div>`;
+        }
+        routingHtml = `
+            <div style="margin-top: 8px; padding: 10px; background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; font-size: 11px;">
+                <strong>👥 Consolidado de Ruta:</strong> El cliente tiene <strong>${siblingDeliveries.length} pedidos hoy</strong>.
+                ${addressesListHtml}
             </div>
         `;
     }
 
+    // 3. Detalles de prendas y servicios
+    let itemsListHtml = "";
+    if (d.items && d.items.length > 0) {
+        itemsListHtml = d.items.map(item => `• ${item.quantity}x ${escapeHtml(item.type)}`).join('<br/>');
+    } else {
+        itemsListHtml = `• ${d.expected_items} prendas esperadas (Plan no especificado)`;
+    }
+
+    // 4. Pago consolidado
+    const payDetails = d.payment_details ? d.payment_details : "Sin detalles de pago específicos (Pago en punto o contraentrega).";
+
+    // 5. Indicaciones del chat
+    const chatNotes = extractDeliveryNotes(d.chat_transcription);
+
+    // 6. Ocultar campos viejos redundantes del modal
+    document.getElementById('chat-modal-address').style.display = 'none';
+    document.getElementById('chat-modal-amount').style.display = 'none';
+    
+    // Ocultar sección vieja de detalles de pago para evitar duplicados
+    const payDetailsEl = document.getElementById('chat-modal-payment-details');
+    if (payDetailsEl && payDetailsEl.parentNode) {
+        payDetailsEl.parentNode.style.display = 'none';
+    }
+
+    // Ocultar el elemento de raw address dinámico anterior si existe
+    const oldRawEl = document.getElementById('chat-modal-raw-address');
+    if (oldRawEl) {
+        oldRawEl.style.display = 'none';
+    }
+
+    // 7. Renderizar cabecera básica del cliente
     document.getElementById('chat-modal-title').textContent = `Pedido #${d.ticket_number || 'N/A'}`;
     
-    // Status pill style
     const statusPill = document.getElementById('chat-modal-status');
     statusPill.textContent = d.status === 'PENDIENTE' ? 'Pendiente' : (d.status === 'EN_RUTA' ? 'En Ruta' : 'Entregado');
     statusPill.className = `status-pill ${d.status === 'PENDIENTE' ? 'pending' : (d.status === 'EN_RUTA' ? 'route' : 'delivered')}`;
 
     document.getElementById('chat-modal-client-name').textContent = d.client_name;
     document.getElementById('chat-modal-phone').textContent = `Celular: +${d.client_phone}`;
-    
-    // Highlight if address is placeholder "Recogida WhatsApp"
-    const isPlaceholder = d.address === 'Recogida WhatsApp';
-    const addressEl = document.getElementById('chat-modal-address');
-    if (isPlaceholder) {
-        addressEl.innerHTML = `Dirección: <span style="color:var(--warning); font-weight:700; background:rgba(239,68,68,0.1); padding:2px 6px; border-radius:4px;">⚠️ Recogida WhatsApp (No confirmada)</span>`;
-    } else {
-        addressEl.textContent = `Dirección: ${d.address}`;
-    }
 
-    // Mostrar dirección original escrita por el cliente
-    const rawAddressEl = document.getElementById('chat-modal-raw-address') || (() => {
-        const el = document.createElement('div');
-        el.id = 'chat-modal-raw-address';
-        el.style.cssText = "font-size: 11px; color: var(--text-muted); margin-top: 4px; padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 6px; line-height: 1.3;";
-        addressEl.parentNode.insertBefore(el, addressEl.nextSibling);
-        return el;
-    })();
-    rawAddressEl.innerHTML = `<strong>📍 Dirección original escrita por el cliente:</strong><br/>"${escapeHtml(d.raw_address || d.address)}"`;
-
-    document.getElementById('chat-modal-amount').textContent = `Valor: $${d.amount.toLocaleString()} (${d.pay_method})`;
-
-    // Payment details
-    const payDetailsEl = document.getElementById('chat-modal-payment-details');
-    if (d.payment_details) {
-        payDetailsEl.textContent = d.payment_details;
-        payDetailsEl.style.color = 'var(--text-main)';
-    } else {
-        payDetailsEl.textContent = "Sin detalles de pago específicos (Pago en punto o contraentrega).";
-        payDetailsEl.style.color = 'var(--text-muted)';
-    }
-
-    // Resumen para Repartidor
+    // 8. Caja de Resumen Integrado (Pulido, sin tanto texto, súper ordenado)
     const summaryBoxHtml = `
-        <div class="summary-route-box" style="margin-bottom: 12px; padding: 10px; background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 8px; font-size: 12px; color: var(--text-main); line-height: 1.4;">
-            <div style="font-weight: 700; color: var(--primary); margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">📌 RESUMEN CRÍTICO PARA RUTA</div>
-            ${addressesWarningHtml}
-            <div style="margin-bottom: 6px;"><strong>📍 Dirección original:</strong> ${escapeHtml(d.raw_address || d.address)}</div>
-            <div style="margin-bottom: 6px;"><strong>👔 Prendas y servicios contratados:</strong>
-                ${d.items && d.items.length > 0 
-                    ? d.items.map(item => `<div style="padding-left: 10px; color: var(--secondary); margin-top: 2px;">• ${item.quantity}x ${escapeHtml(item.type)}</div>`).join('')
-                    : `<div style="padding-left: 10px; color: var(--text-muted);">• ${d.expected_items} prendas esperadas (Plan no especificado)</div>`
-                }
+        <div class="summary-route-box" style="padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: var(--text-main); line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
+            
+            <!-- Sección: Planificación de Entrega -->
+            <div style="border-bottom: 1px dashed var(--border); padding-bottom: 8px;">
+                <div style="font-weight: 700; color: var(--primary); font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">📍 PLANIFICACIÓN DE ENTREGA</div>
+                <div><strong>Dirección de entrega:</strong> ${formatShortAddress(d.address)}</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"><strong>Original escrita:</strong> "${escapeHtml(d.raw_address || d.address)}"</div>
+                ${routingHtml}
             </div>
-            <div><strong>ℹ️ Indicaciones del Chat:</strong><div style="padding-left: 10px; font-style: italic; color: var(--text-muted); white-space: pre-line; margin-top: 2px;">${escapeHtml(extractDeliveryNotes(d.chat_transcription))}</div></div>
+
+            <!-- Sección: Prendas y Servicios -->
+            <div style="border-bottom: 1px dashed var(--border); padding-bottom: 8px;">
+                <div style="font-weight: 700; color: var(--secondary); font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">👔 DETALLE DEL SERVICIO</div>
+                <div style="color: var(--text-main); font-weight: 500;">${itemsListHtml}</div>
+            </div>
+
+            <!-- Sección: Detalles de Pago -->
+            <div style="border-bottom: 1px dashed var(--border); padding-bottom: 8px;">
+                <div style="font-weight: 700; color: #10b981; font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">💰 INFORMACIÓN DE PAGO</div>
+                <div><strong>Total:</strong> $${d.amount.toLocaleString()} (${d.pay_method})</div>
+                <div style="font-size: 11px; color: var(--text-muted); font-style: italic; margin-top: 2px;">"${payDetails}"</div>
+            </div>
+
+            <!-- Sección: Indicaciones de Entrega -->
+            <div>
+                <div style="font-weight: 700; color: #a78bfa; font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">ℹ️ INDICACIONES Y PUNTOS DE REFERENCIA</div>
+                <div style="background: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); color: var(--text-muted); font-style: italic;">
+                    ${chatNotes}
+                </div>
+            </div>
+            
         </div>
     `;
 
-    // Inyectar el resumen crítico de ruta en su propia sección limpia
+    // 9. Inyectar en su propia sección limpia
     const routeSummaryEl = document.getElementById('chat-modal-route-summary');
     if (routeSummaryEl) {
         routeSummaryEl.innerHTML = summaryBoxHtml;
     }
 
-    // Chat transcription
+    // 10. Chat transcription (sin resumen crítico dentro, solo el historial)
     const transcriptEl = document.getElementById('chat-modal-transcript');
     if (d.chat_transcription) {
         transcriptEl.innerHTML = `
