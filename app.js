@@ -677,11 +677,14 @@ function createDeliveryCard(d) {
 
         actions.innerHTML = `
             <button class="btn btn-maps" onclick="openMaps('${d.id}')">
-                🗺️ Maps / Waze
+                🗺️ Maps
             </button>
             <button class="btn btn-chat" onclick="toggleWhatsappTemplatesDropdown(event, '${d.id}')" style="position:relative;">
-                💬 WhatsApp
+                💬 Chat
             </button>
+            <a class="btn btn-call" href="tel:${d.client_phone}">
+                📞 Llamar
+            </a>
             ${startButton}
         `;
         card.appendChild(actions);
@@ -1351,6 +1354,7 @@ function toggleWhatsappTemplatesDropdown(event, id) {
         { label: "🏍️ En Camino (10m)", trigger: "EN_RUTA", text: `Hola ${d.client_name}, soy Ramón de Lavaseco Orquídeas. Ya voy en camino a tu dirección: ${d.address}. Estaré allí en unos 10 minutos.` },
         { label: "🕒 Retraso en Vía", trigger: "RETRASO", text: `Hola ${d.client_name}, he tenido un pequeño retraso de 15 minutos en la vía. Estaré llegando lo más pronto posible. ¡Gracias!` },
         { label: "📍 Llegué al Punto", trigger: "LLEGADA", text: `Hola ${d.client_name}, ya me encuentro afuera de tu dirección: ${d.address}.` },
+        { label: "❓ Perdido / Confirmar Ubicación", trigger: "PERDIDO", text: "" },
         { label: "📦 Confirmar Recibido", trigger: "ENTREGADO", text: `Hola ${d.client_name}, tu servicio por valor de $${d.amount.toLocaleString()} ha sido entregado. ¡Muchas gracias por tu confianza!` },
         { label: "💬 Chat Manual", trigger: "MANUAL", text: "" }
     ];
@@ -1366,6 +1370,26 @@ function toggleWhatsappTemplatesDropdown(event, id) {
                 const url = `https://wa.me/${d.client_phone}`;
                 window.open(url, '_blank');
                 addSystemLog(`💬 WhatsApp Manual: Abierto chat libre con ${d.client_name}.`);
+            } else if (t.trigger === "PERDIDO") {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const lat = position.coords.latitude;
+                            const lng = position.coords.longitude;
+                            const gpsLink = `https://maps.google.com/?q=${lat},${lng}`;
+                            const msg = `Hola ${d.client_name}, me encuentro en la zona de entrega buscando tu dirección pero las calles son confusas. Estoy exactamente en este punto: ${gpsLink}. ¿Me podrías confirmar tu dirección o compartir un enlace de tu ubicación exacta por aquí? ¡Muchas gracias!`;
+                            sendWhatsappNotification(id, "PERDIDO", msg);
+                        },
+                        (err) => {
+                            const msg = `Hola ${d.client_name}, llegué a tu zona de entrega pero no ubico tu dirección exacta. ¿Me confirmarías la dirección o me compartirías un enlace de tu ubicación de WhatsApp para guiarme? ¡Muchas gracias!`;
+                            sendWhatsappNotification(id, "PERDIDO", msg);
+                        },
+                        { timeout: 4000, enableHighAccuracy: true }
+                    );
+                } else {
+                    const msg = `Hola ${d.client_name}, llegué a tu zona de entrega pero no ubico tu dirección exacta. ¿Me confirmarías la dirección o me compartirías un enlace de tu ubicación de WhatsApp para guiarme? ¡Muchas gracias!`;
+                    sendWhatsappNotification(id, "PERDIDO", msg);
+                }
             } else {
                 sendWhatsappNotification(id, t.trigger, t.text);
             }

@@ -88,10 +88,40 @@ function extractLocalidad(osmAddress) {
     return null;
 }
 
+// Formatear direcciones colombianas para que sean interpretadas correctamente por Nominatim
+function formatColombianAddress(addr) {
+    if (!addr) return "";
+    let clean = addr.trim().replace(/[:.,]$/g, '').trim();
+    
+    // Si la dirección ya tiene símbolos estructuradores comunes, se deja igual
+    if (clean.includes("#") || clean.toLowerCase().includes("no.") || clean.toLowerCase().includes("no ")) {
+        return clean;
+    }
+    
+    // Reemplazar espacios innecesarios entre números y letras (ej: "34 A" -> "34A")
+    let structured = clean
+        .replace(/(\d+)\s+([a-zA-Z])(?!\w)/g, '$1$2')
+        .trim();
+        
+    // Coincidir patrón: Calle/Carrera/etc. + Número + Prefijo opcional + Cruce + Casa/Puerta
+    const regex = /^(calle|carrera|cl|cra|av|avenida|transversal|diagonal|dg|tv|cll)\s+(\d+[a-zA-Z]?)\s*(sur|norte|este|oeste)?\s+(\d+[a-zA-Z]?)\s+(\d+)$/i;
+    const match = structured.match(regex);
+    if (match) {
+        const type = match[1];
+        const num1 = match[2];
+        const suffix = match[3] ? " " + match[3] : "";
+        const num2 = match[4];
+        const num3 = match[5];
+        return `${type} ${num1}${suffix} # ${num2} - ${num3}`;
+    }
+    
+    return clean;
+}
+
 // Geocodificar dirección usando OpenStreetMap Nominatim
 function geocodeAddress(address) {
     return new Promise((resolve) => {
-        let query = address;
+        let query = formatColombianAddress(address);
         // Eliminar apartamentos, casas, etc.
         query = query.replace(/(apto|apartamento|casa|piso|bloque|conjunto|interior|torre|barrio).*$/i, '').trim();
         
@@ -239,6 +269,19 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
                 expenses_detail TEXT,
                 updated_at INTEGER
             )`);
+
+            // Limpiar registros fallidos o fallbacks antiguos en la base de datos local para forzar su re-geocodificación
+            appDb.run(`
+                DELETE FROM delivery_metadata 
+                WHERE latitude IN (4.7011, 4.7250, 4.6675, 4.6432, 4.6669, 4.7012, 4.6738, 4.6307, 4.6186, 4.6205, 4.4600, 4.5300, 4.5600)
+                  AND resolved_address != 'Recogida WhatsApp'
+            `, [], (err) => {
+                if (err) {
+                    console.error("❌ Error limpiando fallbacks de geocodificación:", err.message);
+                } else {
+                    console.log("🧹 Limpiados fallbacks de geocodificación previos en la base de datos para forzar re-geocodificación.");
+                }
+            });
         });
     }
 });
