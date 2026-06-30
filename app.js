@@ -503,15 +503,58 @@ async function saveNewOrder() {
     renderContent();
 }
 
+// Agrupador de pedidos para evitar duplicidad de tarjetas de un mismo cliente
+function groupDeliveries(deliveriesArray) {
+    const groups = {};
+    deliveriesArray.forEach(d => {
+        const key = `${d.client_name || ''}_${d.client_phone || ''}`;
+        if (!groups[key]) {
+            groups[key] = [];
+        }
+        groups[key].push(d);
+    });
+    
+    return Object.values(groups).map(group => {
+        // Ordenar internamente por número de ticket
+        group.sort((a, b) => (a.ticket_number || 0) - (b.ticket_number || 0));
+        const main = group[0];
+        
+        const hasEnRuta = group.some(item => item.status === 'EN_RUTA');
+        const allEntregado = group.every(item => item.status === 'ENTREGADO');
+        
+        let status = 'PENDIENTE';
+        if (hasEnRuta) {
+            status = 'EN_RUTA';
+        } else if (allEntregado) {
+            status = 'ENTREGADO';
+        }
+        
+        const totalAmount = group.reduce((sum, item) => sum + (item.amount || 0), 0);
+        const totalExpected = group.reduce((sum, item) => sum + (item.expected_items || 1), 0);
+        const totalCollected = group.reduce((sum, item) => sum + (item.collected_items || 0), 0);
+        
+        return {
+            ...main,
+            status: status,
+            amount: totalAmount,
+            expected_items: totalExpected,
+            collected_items: totalCollected,
+            orders: group
+        };
+    });
+}
+
 // Vista de Domicilios
 function renderDeliveriesView(container) {
     const filtered = deliveries
         .filter(d => d.localidad === currentLocalidad && d.order_date === currentDate)
         .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
         
-    const activeRoute = filtered.filter(d => d.status === "EN_RUTA");
-    const pending = filtered.filter(d => d.status === "PENDIENTE");
-    const completed = filtered.filter(d => d.status === "ENTREGADO");
+    const grouped = groupDeliveries(filtered);
+        
+    const activeRoute = grouped.filter(d => d.status === "EN_RUTA");
+    const pending = grouped.filter(d => d.status === "PENDIENTE");
+    const completed = grouped.filter(d => d.status === "ENTREGADO");
 
     const walletWidget = `
         <div class="wallet-widget">
@@ -607,85 +650,41 @@ function createDeliveryCard(d) {
         ? `📦 ${d.collected_items} prendas devueltas` 
         : `📦 ${d.expected_items} prendas esperadas`;
 
+    const siblingCount = d.orders ? d.orders.length : 1;
+
     let itemsDetailHtml = "";
-    if (d.items && d.items.length > 0) {
+    if (d.orders && d.orders.length > 1) {
         itemsDetailHtml = `
-            <div class="items-list-box" style="margin-top: 4px; margin-bottom: 6px; padding: 6px 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; color: var(--text-main);">
-                ${d.items.map(item => `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span>👔 ${item.quantity}x ${item.type}</span><span style="color:var(--text-muted); font-weight:500;">$${item.price.toLocaleString()}</span></div>`).join('')}
+            <div style="font-size: 11px; margin-top: 4px; margin-bottom: 6px; padding: 8px 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: 6px;">
+                ${d.orders.map(o => {
+                    const statusIcon = o.status === 'ENTREGADO' ? '✅' : (o.status === 'EN_RUTA' ? '🏍️' : '🕒');
+                    const itemsDesc = o.items && o.items.length > 0 
+                        ? o.items.map(item => `${item.quantity}x ${item.type}`).join(', ')
+                        : `${o.expected_items} prendas`;
+                    return `
+                        <div style="display: flex; flex-direction: column; padding-bottom: 4px; border-bottom: 1px dashed rgba(255,255,255,0.05); line-height: 1.3;">
+                            <div style="display: flex; justify-content: space-between; font-weight: 700;">
+                                <span style="color: var(--primary);">🎟️ #${o.ticket_number || 'N/A'}</span>
+                                <span style="font-size: 10px; color: var(--text-muted);">${statusIcon} ${o.status === 'EN_RUTA' ? 'En Ruta' : (o.status === 'PENDIENTE' ? 'Pendiente' : 'Entregado')}</span>
+                            </div>
+                            <div style="color: var(--text-main); font-size: 11px; margin-top: 2px;">${itemsDesc}</div>
+                            <div style="text-align: right; font-weight: 600; font-size: 10px; color: var(--secondary); margin-top: 1px;">$${o.amount.toLocaleString()}</div>
+                        </div>
+                    `;
+                }).join('')}
             </div>
         `;
+    } else {
+        if (d.items && d.items.length > 0) {
+            itemsDetailHtml = `
+                <div class="items-list-box" style="margin-top: 4px; margin-bottom: 6px; padding: 6px 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; color: var(--text-main);">
+                    ${d.items.map(item => `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span>👔 ${item.quantity}x ${item.type}</span><span style="color:var(--text-muted); font-weight:500;">$${item.price.toLocaleString()}</span></div>`).join('')}
+                </div>
+            `;
+        }
     }
 
     const isWarningAddress = d.address === 'Recogida WhatsApp';
-
-    // Contar cuántos servicios tiene el mismo cliente hoy en el mismo/otro estado
-    const siblingDeliveries = deliveries.filter(item => 
-        item.order_date === d.order_date && 
-        item.client_name === d.client_name &&
-        item.client_phone === d.client_phone
-    );
-    const siblingCount = siblingDeliveries.length;
-    // Alerta de direcciones distintas para el mismo cliente (agrupadas por proximidad GPS y texto)
-    const uniqueLocations = [];
-    siblingDeliveries.forEach(item => {
-        if (item.address === 'Recogida WhatsApp') return;
-        
-        let isNew = true;
-        for (const loc of uniqueLocations) {
-            // Comparar texto simplificado
-            const cleanA = (item.raw_address || item.address || "").toLowerCase().replace(/[^a-z0-9]/g, '');
-            const cleanB = (loc.rawAddress || "").toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
-                isNew = false;
-                break;
-            }
-            // Comparar coordenadas GPS por proximidad
-            if (item.latitude && item.longitude && loc.latitude && loc.longitude) {
-                const latDiff = Math.abs(item.latitude - loc.latitude);
-                const lngDiff = Math.abs(item.longitude - loc.longitude);
-                if (latDiff < 0.003 && lngDiff < 0.003) {
-                    isNew = false;
-                    break;
-                }
-            }
-        }
-        if (isNew) {
-            let displayAddress = item.raw_address || item.address;
-            if (displayAddress && displayAddress.includes(",")) {
-                displayAddress = displayAddress.split(",")[0].trim();
-            }
-            uniqueLocations.push({
-                display: displayAddress,
-                rawAddress: item.raw_address || item.address,
-                latitude: item.latitude,
-                longitude: item.longitude
-            });
-        }
-    });
-
-    let siblingBadgeHtml = "";
-    if (siblingCount > 1) {
-        const pend = siblingDeliveries.filter(item => item.status === 'PENDIENTE').length;
-        const route = siblingDeliveries.filter(item => item.status === 'EN_RUTA').length;
-        
-        if (uniqueLocations.length > 1) {
-            // Direcciones diferentes hoy
-            siblingBadgeHtml = `
-                <div class="sibling-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 4px 8px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 6px; color: var(--warning); font-size: 11px; font-weight: 700; display: block; line-height: 1.3;">
-                    ⚠️ ${siblingCount} servs. hoy (${pend} Pend. / ${route} Ruta) • Dirección diferente
-                </div>
-            `;
-        } else {
-            // Mismo domicilio
-            siblingBadgeHtml = `
-                <div class="sibling-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 4px 8px; background: rgba(139, 92, 246, 0.06); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 6px; color: var(--primary); font-size: 11px; font-weight: 700; display: block; line-height: 1.3;">
-                    👥 ${siblingCount} servs. hoy (${pend} Pend. / ${route} Ruta)
-                </div>
-            `;
-        }
-    }
-
-    let addressWarningHtml = "";
 
     card.innerHTML = `
         <div class="card-header">
@@ -728,26 +727,29 @@ function createDeliveryCard(d) {
         const actions = document.createElement("div");
         actions.className = "card-actions";
         
+        const orderIdsCsv = d.orders ? d.orders.map(o => o.id).join(',') : d.id;
+        const mainId = d.orders ? d.orders[0].id : d.id;
+        
         let startButton = "";
         if (d.status === "PENDIENTE") {
             startButton = `
-                <button class="btn btn-deliver" onclick="startRoute('${d.id}')">
+                <button class="btn btn-deliver" onclick="startRoute('${orderIdsCsv}')">
                     🏍️ Iniciar Entrega (En Ruta)
                 </button>
             `;
         } else {
             startButton = `
-                <button class="btn btn-deliver" onclick="openConfirmModal('${d.id}')">
+                <button class="btn btn-deliver" onclick="openConfirmModal('${orderIdsCsv}')">
                     📦 Confirmar Recibido / Entrega
                 </button>
             `;
         }
 
         actions.innerHTML = `
-            <button class="btn btn-maps" onclick="openMaps('${d.id}')">
+            <button class="btn btn-maps" onclick="openMaps('${mainId}')">
                 🗺️ Maps
             </button>
-            <button class="btn btn-chat" onclick="toggleWhatsappTemplatesDropdown(event, '${d.id}')" style="position:relative;">
+            <button class="btn btn-chat" onclick="toggleWhatsappTemplatesDropdown(event, '${mainId}')" style="position:relative;">
                 💬 Chat
             </button>
             <a class="btn btn-call" href="tel:${d.client_phone}">
@@ -797,15 +799,17 @@ function renderLifoView(container) {
             return (a.sort_order || 0) - (b.sort_order || 0);
         });
 
-    if (sorted.length === 0) {
+    const grouped = groupDeliveries(sorted);
+
+    if (grouped.length === 0) {
         itemsContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">No hay pedidos para cargar hoy.</div>`;
         return;
     }
 
-    sorted.forEach((d, index) => {
+    grouped.forEach((d, index) => {
         const item = document.createElement("div");
         item.className = "maleta-item";
-        const posLabel = index === 0 ? "ARRIBA (FÁCIL ACCESO)" : (index === sorted.length - 1 ? "FONDO MALETA" : `POSICIÓN ${sorted.length - index}`);
+        const posLabel = index === 0 ? "ARRIBA (FÁCIL ACCESO)" : (index === grouped.length - 1 ? "FONDO MALETA" : `POSICIÓN ${grouped.length - index}`);
         item.innerHTML = `
             <div>
                 <div style="font-weight:600; font-size:14px;">${d.client_name}</div>
@@ -1266,27 +1270,36 @@ async function optimizeRouteByProximity(localidad, silent = false) {
 
 // 4. Acciones de Entregas
 async function startRoute(id) {
-    const delivery = deliveries.find(d => d.id === id);
-    if (delivery) {
-        deliveries.forEach(d => {
-            if (d.status === "EN_RUTA" && d.id !== id) {
-                d.status = "PENDIENTE";
-                d.sync_pending = true;
-            }
-        });
-        delivery.status = "EN_RUTA";
-        delivery.sync_pending = true;
-        
-        await saveDeliveries();
-        addSystemLog(`🏍️ Ruta iniciada para ${delivery.client_name}. Estado actualizado.`);
-        renderContent();
-        triggerBackgroundSync();
-        
-        // Enviar notificación automática si la API está configurada
-        const waEnabled = localStorage.getItem("wa-api-enabled") === "true";
-        if (waEnabled) {
-            sendWhatsappNotification(id, "EN_RUTA");
+    const ids = id.split(',');
+    const mainId = ids[0];
+    
+    // Poner todas las demás entregas activas a PENDIENTE
+    deliveries.forEach(d => {
+        if (d.status === "EN_RUTA" && !ids.includes(d.id)) {
+            d.status = "PENDIENTE";
+            d.sync_pending = true;
         }
+    });
+
+    // Poner las entregas del grupo a EN_RUTA
+    let clientName = "";
+    ids.forEach(currentId => {
+        const delivery = deliveries.find(d => d.id === currentId);
+        if (delivery) {
+            delivery.status = "EN_RUTA";
+            delivery.sync_pending = true;
+            clientName = delivery.client_name;
+        }
+    });
+    
+    await saveDeliveries();
+    addSystemLog(`🏍️ Ruta iniciada para ${clientName} (${ids.length} pedidos). Estado actualizado.`);
+    renderContent();
+    triggerBackgroundSync();
+    
+    const waEnabled = localStorage.getItem("wa-api-enabled") === "true";
+    if (waEnabled) {
+        sendWhatsappNotification(mainId, "EN_RUTA");
     }
 }
 
@@ -1639,16 +1652,21 @@ function adjustItemCount(direction) {
 // Abrir modal
 function openConfirmModal(id) {
     currentActiveDeliveryId = id;
-    const d = deliveries.find(d => d.id === id);
+    const ids = id.split(',');
+    const mainId = ids[0];
+    const groupItems = deliveries.filter(d => ids.includes(d.id));
+    const d = groupItems.find(d => d.id === mainId);
+    
     if (d) {
         document.getElementById('modal-client-name').textContent = "Entrega: " + d.client_name;
-        document.getElementById('modal-amount').textContent = "$" + d.amount.toLocaleString();
         
-        // CORRECCIÓN BUG UNDEFINED:
-        // Aseguramos que si d.expected_items es undefined (datos viejos), usemos 1 como base.
-        // Pero gracias a la migración automática de initApp, esto ya estará corregido preventivamente.
-        const prendasEsperadas = d.expected_items || 1;
-        currentCollectedItemsCount = d.collected_items || prendasEsperadas;
+        // Sumar montos del grupo
+        const totalAmt = groupItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+        document.getElementById('modal-amount').textContent = "$" + totalAmt.toLocaleString();
+        
+        // Sumar prendas esperadas
+        const totalExpected = groupItems.reduce((sum, item) => sum + (item.expected_items || 1), 0);
+        currentCollectedItemsCount = totalExpected;
         
         const display = document.getElementById("modal-items-count-display");
         const expectedInfo = document.getElementById("modal-expected-items-info");
@@ -1660,26 +1678,34 @@ function openConfirmModal(id) {
         }
         if (expectedInfo) {
             expectedInfo.style.color = "";
-            expectedInfo.textContent = `Esperadas según chatbot: ${prendasEsperadas} prendas`;
+            expectedInfo.textContent = `Esperadas según chatbot: ${totalExpected} prendas`;
         }
 
         const detailsList = document.getElementById("modal-items-details-list");
         if (detailsList) {
-            if (d.items && d.items.length > 0) {
-                detailsList.style.display = "block";
-                detailsList.innerHTML = `
-                    <div style="font-weight: 700; color: var(--secondary); margin-bottom: 4px; border-bottom: 1px solid var(--border); padding-bottom: 3px; text-align: left;">👔 Artículos a Verificar:</div>
-                    ${d.items.map(item => `
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 500; text-align: left;">
-                            <span>• ${item.quantity}x ${escapeHtml(item.type)}</span>
-                            <span style="color: var(--text-muted);">$${item.price.toLocaleString()}</span>
+            detailsList.style.display = "block";
+            let detailsHtml = `<div style="font-weight: 700; color: var(--secondary); margin-bottom: 4px; border-bottom: 1px solid var(--border); padding-bottom: 3px; text-align: left;">👔 Artículos a Verificar:</div>`;
+            groupItems.forEach(item => {
+                if (item.items && item.items.length > 0) {
+                    detailsHtml += `
+                        <div style="font-size: 11px; font-weight: 700; color: var(--primary); margin-top: 4px; text-align: left;">🎟️ #${item.ticket_number || 'N/A'}:</div>
+                        ${item.items.map(sub => `
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 500; text-align: left; padding-left: 6px;">
+                                <span>• ${sub.quantity}x ${escapeHtml(sub.type)}</span>
+                                <span style="color: var(--text-muted);">$${sub.price.toLocaleString()}</span>
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    detailsHtml += `
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 500; text-align: left; margin-top: 4px;">
+                            <span>• Pedido #${item.ticket_number || 'N/A'}: ${item.expected_items || 1} prendas</span>
+                            <span style="color: var(--text-muted);">$${item.amount.toLocaleString()}</span>
                         </div>
-                    `).join('')}
-                `;
-            } else {
-                detailsList.style.display = "none";
-                detailsList.innerHTML = "";
-            }
+                    `;
+                }
+            });
+            detailsList.innerHTML = detailsHtml;
         }
 
         // Resetear simuladores
@@ -1953,44 +1979,67 @@ function closeChatDetailsModal() {
 }
 
 async function confirmDelivery() {
-    const d = deliveries.find(d => d.id === currentActiveDeliveryId);
-    if (d) {
-        d.status = "ENTREGADO";
-        d.evidence_photo = "foto_evidencia.png";
-        d.signature_drawn = true;
-        d.collected_items = currentCollectedItemsCount;
-        d.sync_pending = true;
-
-        if (d.expected_items !== d.collected_items) {
-            addSystemLog(`⚠️ ALERTA: Discrepancia física en ${d.client_name}. Chatbot: ${d.expected_items} | Domiciliario: ${d.collected_items}.`);
-        }
+    const ids = currentActiveDeliveryId.split(',');
+    const mainId = ids[0];
+    
+    const deliveriesToConfirm = deliveries.filter(d => ids.includes(d.id));
+    if (deliveriesToConfirm.length > 0) {
+        let lat = null;
+        let lng = null;
+        
+        const applyConfirmation = async () => {
+            deliveriesToConfirm.forEach(d => {
+                d.status = "ENTREGADO";
+                d.evidence_photo = "foto_evidencia.png";
+                d.signature_drawn = true;
+                if (d.id === mainId) {
+                    d.collected_items = currentCollectedItemsCount;
+                    if (d.expected_items !== d.collected_items) {
+                        addSystemLog(`⚠️ ALERTA: Discrepancia física en ${d.client_name} (#${d.ticket_number}). Chatbot: ${d.expected_items} | Domiciliario: ${d.collected_items}.`);
+                    }
+                } else {
+                    d.collected_items = d.expected_items || 1;
+                }
+                
+                if (lat !== null && lng !== null) {
+                    d.latitude = lat;
+                    d.longitude = lng;
+                }
+                d.sync_pending = true;
+            });
+            
+            await saveDeliveries();
+            recalculateShiftCash();
+            closeConfirmModal();
+            renderLocalidades();
+            renderContent();
+            
+            triggerBackgroundSync();
+            addSystemLog(`🎉 ${deliveriesToConfirm.length} pedidos de ${deliveriesToConfirm[0].client_name} completados con éxito.`);
+            
+            const waEnabled = localStorage.getItem("wa-api-enabled") === "true";
+            if (waEnabled) {
+                sendWhatsappNotification(mainId, "ENTREGADO");
+            }
+            
+            alert(`🎉 ¡Entrega de ${deliveriesToConfirm.length} pedidos completada con éxito!`);
+        };
 
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (position) => {
-                d.latitude = position.coords.latitude;
-                d.longitude = position.coords.longitude;
-                addSystemLog(`🗺️ Coordenadas capturadas: ${d.latitude.toFixed(5)}, ${d.longitude.toFixed(5)}`);
-                await saveDeliveries();
-                triggerBackgroundSync();
-            });
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    lat = position.coords.latitude;
+                    lng = position.coords.longitude;
+                    addSystemLog(`🗺️ Coordenadas capturadas: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+                    await applyConfirmation();
+                },
+                async (error) => {
+                    await applyConfirmation();
+                }
+            );
+        } else {
+            await applyConfirmation();
         }
-        
-        await saveDeliveries();
-        recalculateShiftCash();
-        closeConfirmModal();
-        renderLocalidades();
-        renderContent();
-        
-        triggerBackgroundSync();
-        addSystemLog(`🎉 Pedido de ${d.client_name} completado con éxito.`);
-        
-        // Enviar notificación automática si la API está configurada
-        const waEnabled = localStorage.getItem("wa-api-enabled") === "true";
-        if (waEnabled) {
-            sendWhatsappNotification(d.id, "ENTREGADO");
-        }
-        
-        alert("🎉 ¡Despacho completado con éxito!");
     }
 }
 

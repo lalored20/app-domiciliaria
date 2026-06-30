@@ -473,24 +473,12 @@ function getMergedDeliveries() {
                         const dateStr = epochToColombiaDateString(o.created_at);
                         const expectedItems = meta.expected_items !== undefined ? meta.expected_items : (o.items_count || 1);
                         
-                        let phoneClean = o.clientPhone.replace(/\D/g, '');
-                        if (phoneClean === '573178272969' || phoneClean === '3178272969') {
-                            let hash = 0;
-                            const name = o.clientName || 'Cliente';
-                            for (let i = 0; i < name.length; i++) {
-                                hash = name.charCodeAt(i) + ((hash << 5) - hash);
-                            }
-                            const absHash = Math.abs(hash);
-                            const suffix = String(absHash % 90000 + 10000);
-                            phoneClean = `5731782${suffix}`;
-                        }
-                        
                         return {
                             id: o.id,
                             chatbot_order_id: o.id,
                             ticket_number: o.ticketNumber,
                             client_name: o.clientName,
-                            client_phone: phoneClean,
+                            client_phone: o.clientPhone.replace(/\D/g, ''),
                             address: meta.resolved_address || o.clientAddress,
                             raw_address: o.clientAddress,
                             localidad: meta.resolved_localidad || detectarLocalidad(meta.resolved_address || o.clientAddress, meta.latitude, meta.longitude),
