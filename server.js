@@ -264,7 +264,7 @@ function detectarLocalidad(direccion, lat, lon) {
         if (dirUpper.includes("FONTIBON") || dirUpper.includes("MODELIA") || dirUpper.includes("HAYUELOS") || dirUpper.includes("ZONA FRANCA")) {
             return "Fontibón";
         }
-        if (dirUpper.includes("KENNEDY") || dirUpper.includes("CASTILLA") || dirUpper.includes("AMERICAS") || dirUpper.includes("TINTAL") || dirUpper.includes("TIERRA BUENA") || dirUpper.includes("TIERRABUENA") || dirUpper.includes("PATIO BONITO")) {
+        if (dirUpper.includes("KENNEDY") || dirUpper.includes("CASTILLA") || dirUpper.includes("AMERICAS") || dirUpper.includes("TINTAL") || dirUpper.includes("TIERRA BUENA") || dirUpper.includes("TIERRABUENA") || dirUpper.includes("PATIO BONITO") || dirUpper.includes("CANDALAIMA")) {
             return "Kennedy";
         }
         if (dirUpper.includes("BOSA") || dirUpper.includes("RECREO")) {
@@ -273,7 +273,7 @@ function detectarLocalidad(direccion, lat, lon) {
         if (dirUpper.includes("PUENTE ARANDA") || dirUpper.includes("SALAZAR GOMEZ") || dirUpper.includes("MUZU")) {
             return "Puente Aranda";
         }
-        if (dirUpper.includes("USME") || dirUpper.includes("SAN ANTONIO ELIAS") || dirUpper.includes("SAN ANTONIO")) {
+        if (dirUpper.includes("USME") || dirUpper.includes("SAN ANTONIO ELIAS") || dirUpper.includes("SAN ANTONIO") || dirUpper.includes("AVISUR") || dirUpper.includes("VIRREY")) {
             return "Usme";
         }
         if (dirUpper.includes("CIUDAD BOLIVAR") || dirUpper.includes("MADRIGAL")) {
