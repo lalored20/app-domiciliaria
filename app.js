@@ -1919,7 +1919,7 @@ async function runBackgroundSync() {
                             if (!localItem) {
                                 await db.deliveries.put(serverD);
                                 updatedCount++;
-                            } else if (localItem.sync_pending === false && (
+                            } else if (!localItem.sync_pending && (
                                 localItem.status !== serverD.status ||
                                 localItem.latitude !== serverD.latitude ||
                                 localItem.longitude !== serverD.longitude ||
