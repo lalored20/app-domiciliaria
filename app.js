@@ -124,6 +124,23 @@ async function initApp() {
         try {
             // Cargar entregas reales guardadas en IndexedDB
             deliveries = await db.deliveries.toArray();
+
+            // Saneamiento de coordenadas de fallback residuales locales
+            const fallbackLats = [4.7011, 4.7250, 4.6675, 4.6432, 4.6669, 4.7012, 4.6738, 4.6307, 4.6186, 4.6205, 4.4600, 4.5300, 4.5600];
+            let needsReload = false;
+            for (const d of deliveries) {
+                if (d.latitude && fallbackLats.some(f => Math.abs(f - d.latitude) < 0.001)) {
+                    d.latitude = null;
+                    d.longitude = null;
+                    d.sync_pending = false; // Evitar subir el null erróneamente al servidor
+                    await db.deliveries.put(d);
+                    needsReload = true;
+                }
+            }
+            if (needsReload) {
+                deliveries = await db.deliveries.toArray();
+                addSystemLog("🧹 Limpiadas coordenadas de fallback locales en IndexedDB.");
+            }
             
             // Inicializar turno si no existe o cargar
             const storedShift = await db.shift.get("shift_today");
@@ -619,6 +636,21 @@ function createDeliveryCard(d) {
         `;
     }
 
+    // Alerta de direcciones distintas para el mismo cliente
+    const siblingAddresses = Array.from(new Set(siblingDeliveries.map(item => item.address).filter(Boolean)));
+    let addressWarningHtml = "";
+    if (siblingAddresses.length > 1) {
+        addressWarningHtml = `
+            <div class="address-warning-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 6px 10px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; color: #f87171; font-size: 11px; font-weight: 600; display: block; line-height: 1.4;">
+                ⚠️ <strong>Direcciones Distintas Hoy:</strong>
+                <ul style="margin: 4px 0 0 12px; padding: 0; list-style-type: disc;">
+                    ${siblingAddresses.map(addr => `<li>${addr === d.address ? `<strong>${addr} (Este pedido)</strong>` : addr}</li>`).join('')}
+                </ul>
+                <span style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 4px;">El repartidor debe ir a puntos de entrega/recogida diferentes para este cliente.</span>
+            </div>
+        `;
+    }
+
     card.innerHTML = `
         <div class="card-header">
             <div style="display:flex; align-items:center; gap:8px;">
@@ -639,6 +671,7 @@ function createDeliveryCard(d) {
                 ${prendasText}
             </div>
             ${siblingBadgeHtml}
+            ${addressWarningHtml}
             ${itemsDetailHtml}
             <div class="address-box">
                 <svg width="14" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>

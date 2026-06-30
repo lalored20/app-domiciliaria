@@ -88,6 +88,29 @@ function extractLocalidad(osmAddress) {
     return null;
 }
 
+// Validar si un par de coordenadas corresponden a los fallbacks genéricos de localidad
+function isFallbackCoordinate(lat, lon) {
+    if (!lat || !lon) return false;
+    const lVal = parseFloat(lat);
+    const oVal = parseFloat(lon);
+    const fallbacks = [
+        { lat: 4.7011, lon: -74.0330 },
+        { lat: 4.7250, lon: -74.0850 },
+        { lat: 4.6675, lon: -74.0560 },
+        { lat: 4.6432, lon: -74.0903 },
+        { lat: 4.6669, lon: -74.0759 },
+        { lat: 4.7012, lon: -74.1206 },
+        { lat: 4.6738, lon: -74.1442 },
+        { lat: 4.6307, lon: -74.1534 },
+        { lat: 4.6186, lon: -74.1917 },
+        { lat: 4.6205, lon: -74.1105 },
+        { lat: 4.4600, lon: -74.1200 },
+        { lat: 4.5300, lon: -74.1500 },
+        { lat: 4.5600, lon: -74.0800 }
+    ];
+    return fallbacks.some(f => Math.abs(f.lat - lVal) < 0.0002 && Math.abs(f.lon - oVal) < 0.0002);
+}
+
 // Formatear direcciones colombianas para que sean interpretadas correctamente por Nominatim
 function formatColombianAddress(addr) {
     if (!addr) return "";
@@ -587,8 +610,8 @@ app.post('/api/webhook/order', async (req, res) => {
                     time_window || "10:00 - 12:00",
                     prendasEsperadas,
                     prendasEsperadas,
-                    latitude ? parseFloat(latitude) : null,
-                    longitude ? parseFloat(longitude) : null,
+                    (latitude && !isFallbackCoordinate(latitude, longitude)) ? parseFloat(latitude) : null,
+                    (longitude && !isFallbackCoordinate(latitude, longitude)) ? parseFloat(longitude) : null,
                     getColombiaDateString(),
                     nowEpoch
                 ], async (err) => {
@@ -713,8 +736,8 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     clientD.collected_items || 1,
                     clientD.evidence_photo || null,
                     clientD.signature_drawn ? 1 : 0,
-                    clientD.latitude || null,
-                    clientD.longitude || null,
+                    (clientD.latitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.latitude) : null,
+                    (clientD.longitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.longitude) : null,
                     clientD.order_date || getColombiaDateString(),
                     nowEpoch
                 ], (err) => {
