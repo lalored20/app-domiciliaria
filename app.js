@@ -17,338 +17,7 @@ try {
 }
 
 // Datos de prueba iniciales
-const DEFAULT_DELIVERIES = [
-    {
-        id: "d1",
-        client_name: "Carlos Mendoza",
-        client_phone: "573001234567",
-        address: "Calle 127 # 15-45, Apto 402, Usaquén",
-        localidad: "Usaquén",
-        time_window: "08:00 - 10:00",
-        amount: 120000,
-        pay_method: "Efectivo",
-        status: "EN_RUTA",
-        qr_code: "QR-ORQUIDEAS-8891",
-        expected_items: 6,
-        collected_items: 6,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-18",
-        sync_pending: false,
-        sort_order: 10,
-        latitude: 4.7058,
-        longitude: -74.0423
-    },
-    {
-        id: "d2",
-        client_name: "Sofía Rodríguez",
-        client_phone: "573119876543",
-        address: "Carrera 9 # 118-20, Torre A, Usaquén",
-        localidad: "Usaquén",
-        time_window: "10:00 - 12:00",
-        amount: 60000,
-        pay_method: "Transferencia",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-1123",
-        expected_items: 3,
-        collected_items: 3,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-18",
-        sync_pending: false,
-        sort_order: 20,
-        latitude: 4.6978,
-        longitude: -74.0318
-    },
-    {
-        id: "d3",
-        client_name: "Juan Sebastián Ortiz",
-        client_phone: "573155554433",
-        address: "Calle 140 # 9-80, Casa 4, Usaquén",
-        localidad: "Usaquén",
-        time_window: "14:00 - 16:00",
-        amount: 85000,
-        pay_method: "Pagado (Online)",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-4566",
-        expected_items: 5,
-        collected_items: 5,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-18",
-        sync_pending: false,
-        sort_order: 30,
-        latitude: 4.7189,
-        longitude: -74.0302
-    },
-    {
-        id: "d4",
-        client_name: "Liliana Patricia Vega",
-        client_phone: "573204443322",
-        address: "Calle 145 # 104-50, Apto 502, Suba",
-        localidad: "Suba",
-        time_window: "10:00 - 12:00",
-        amount: 150000,
-        pay_method: "Efectivo",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-0922",
-        expected_items: 12,
-        collected_items: 12,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-18",
-        sync_pending: false,
-        sort_order: 10,
-        latitude: 4.7352,
-        longitude: -74.0901
-    },
-    {
-        id: "d5",
-        client_name: "Andrés Felipe Gómez",
-        client_phone: "573041112233",
-        address: "Carrera 102 # 130-15, Suba",
-        localidad: "Suba",
-        time_window: "14:00 - 16:00",
-        amount: 45000,
-        pay_method: "Transferencia",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-9921",
-        expected_items: 2,
-        collected_items: 2,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-18",
-        sync_pending: false,
-        sort_order: 20,
-        latitude: 4.7178,
-        longitude: -74.0954
-    },
-    // ==========================================
-    // HISTORIAL: 15 DE MAYO DE 2026 (Completados)
-    // ==========================================
-    {
-        id: "d6",
-        client_name: "Clara Inés Restrepo",
-        client_phone: "573163334455",
-        address: "Calle 100 # 8A-30, Usaquén",
-        localidad: "Usaquén",
-        time_window: "10:00 - 12:00",
-        amount: 80000,
-        pay_method: "Efectivo",
-        status: "ENTREGADO",
-        qr_code: "QR-ORQUIDEAS-0012",
-        expected_items: 5,
-        collected_items: 5,
-        evidence_photo: "foto_evidencia.png",
-        signature_drawn: true,
-        order_date: "2026-05-15",
-        sync_pending: false,
-        sort_order: 10,
-        latitude: 4.6860,
-        longitude: -74.0380
-    },
-    {
-        id: "d7",
-        client_name: "Álvaro José Restrepo",
-        client_phone: "573163334466",
-        address: "Carrera 7 # 120-10, Usaquén",
-        localidad: "Usaquén",
-        time_window: "14:00 - 16:00",
-        amount: 45000,
-        pay_method: "Transferencia",
-        status: "ENTREGADO",
-        qr_code: "QR-ORQUIDEAS-0013",
-        expected_items: 2,
-        collected_items: 2,
-        evidence_photo: "foto_evidencia.png",
-        signature_drawn: true,
-        order_date: "2026-05-15",
-        sync_pending: false,
-        sort_order: 20,
-        latitude: 4.6990,
-        longitude: -74.0305
-    },
-    // ==========================================
-    // MAÑANA: 19 DE JUNIO DE 2026 (Pendientes)
-    // ==========================================
-    {
-        id: "d8",
-        client_name: "Mariana Delgado",
-        client_phone: "573121112233",
-        address: "Calle 116 # 7-15, Usaquén",
-        localidad: "Usaquén",
-        time_window: "09:00 - 11:00",
-        amount: 95000,
-        pay_method: "Efectivo",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-1901",
-        expected_items: 4,
-        collected_items: 4,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-19",
-        sync_pending: false,
-        sort_order: 10,
-        latitude: 4.6955,
-        longitude: -74.0295
-    },
-    {
-        id: "d9",
-        client_name: "Roberto Gomez",
-        client_phone: "573105556677",
-        address: "Calle 134 # 19-30, Usaquén",
-        localidad: "Usaquén",
-        time_window: "11:00 - 13:00",
-        amount: 110000,
-        pay_method: "Transferencia",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-1902",
-        expected_items: 8,
-        collected_items: 8,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-19",
-        sync_pending: false,
-        sort_order: 20,
-        latitude: 4.7125,
-        longitude: -74.0450
-    },
-    {
-        id: "d10",
-        client_name: "Diana Marcela Rojas",
-        client_phone: "573157778899",
-        address: "Calle 152 # 111-20, Suba",
-        localidad: "Suba",
-        time_window: "14:00 - 16:00",
-        amount: 55000,
-        pay_method: "Pagado (Online)",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-1903",
-        expected_items: 3,
-        collected_items: 3,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-19",
-        sync_pending: false,
-        sort_order: 10,
-        latitude: 4.7410,
-        longitude: -74.0980
-    },
-    // ==========================================
-    // PASADO MAÑANA: 20 DE JUNIO DE 2026 (Pendientes)
-    // ==========================================
-    {
-        id: "d11",
-        client_name: "Esteban Bernal",
-        client_phone: "573016667788",
-        address: "Carrera 15 # 106-80, Usaquén",
-        localidad: "Usaquén",
-        time_window: "08:00 - 10:00",
-        amount: 130000,
-        pay_method: "Efectivo",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-2001",
-        expected_items: 7,
-        collected_items: 7,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-20",
-        sync_pending: false,
-        sort_order: 10,
-        latitude: 4.6930,
-        longitude: -74.0420
-    },
-    {
-        id: "d12",
-        client_name: "Paola Andrea Cruz",
-        client_phone: "573188889900",
-        address: "Calle 138 # 91-45, Suba",
-        localidad: "Suba",
-        time_window: "10:00 - 12:00",
-        amount: 72000,
-        pay_method: "Transferencia",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-2002",
-        expected_items: 4,
-        collected_items: 4,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-20",
-        sync_pending: false,
-        sort_order: 10,
-        latitude: 4.7265,
-        longitude: -74.0910
-    },
-    {
-        id: "d13",
-        client_name: "Gabriel Soler",
-        client_phone: "573219990011",
-        address: "Carrera 104 # 148-10, Suba",
-        localidad: "Suba",
-        time_window: "14:00 - 16:00",
-        amount: 48000,
-        pay_method: "Efectivo",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-2003",
-        expected_items: 2,
-        collected_items: 2,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-06-20",
-        sync_pending: false,
-        sort_order: 20,
-        latitude: 4.7390,
-        longitude: -74.1015
-    },
-    // ==========================================
-    // PRÓXIMO MES: 10 DE JULIO DE 2026 (Pendientes)
-    // ==========================================
-    {
-        id: "d14",
-        client_name: "Natalia Santos",
-        client_phone: "573004445566",
-        address: "Calle 116 # 15-60, Usaquén",
-        localidad: "Usaquén",
-        time_window: "08:00 - 10:00",
-        amount: 120000,
-        pay_method: "Efectivo",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-0701",
-        expected_items: 6,
-        collected_items: 6,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-07-10",
-        sync_pending: false,
-        sort_order: 10,
-        latitude: 4.6965,
-        longitude: -74.0430
-    },
-    // ==========================================
-    // FUTURO LEJANO: 5 DE AGOSTO DE 2026 (Pendientes)
-    // ==========================================
-    {
-        id: "d15",
-        client_name: "Felipe Vergara",
-        client_phone: "573022223344",
-        address: "Calle 147 # 19-50, Usaquén",
-        localidad: "Usaquén",
-        time_window: "10:00 - 12:00",
-        amount: 75000,
-        pay_method: "Pagado (Online)",
-        status: "PENDIENTE",
-        qr_code: "QR-ORQUIDEAS-0801",
-        expected_items: 4,
-        collected_items: 4,
-        evidence_photo: null,
-        signature_drawn: false,
-        order_date: "2026-08-05",
-        sync_pending: false,
-        sort_order: 10,
-        latitude: 4.7230,
-        longitude: -74.0410
-    }
-];
+const DEFAULT_DELIVERIES = [];
 
 // Inicialización de Supabase
 let supabaseClient = null;
@@ -390,6 +59,16 @@ let currentTab = "deliveries";
 let currentActiveDeliveryId = null;
 let currentCollectedItemsCount = 1;
 
+function getTodayDateString() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+const todayDateStr = getTodayDateString();
+
 let currentShift = {
     id: "shift_today",
     driver_name: "Ramón Mendoza",
@@ -398,7 +77,7 @@ let currentShift = {
     expenses: 0,
     expenses_detail: [],
     status: "ABIERTO",
-    shift_date: "2026-06-18",
+    shift_date: todayDateStr,
     sync_pending: false
 };
 
@@ -412,67 +91,53 @@ let hasSigned = false;
 async function initApp() {
     initSupabase();
 
+    // Purgar datos ficticios residuales si existen en Dexie (IDs que empiezan por "d" y terminan en número)
+    if (db) {
+        try {
+            const keys = await db.deliveries.toCollection().primaryKeys();
+            const mockKeys = keys.filter(k => typeof k === 'string' && /^d\d+$/.test(k));
+            if (mockKeys.length > 0) {
+                await db.deliveries.bulkDelete(mockKeys);
+                addSystemLog(`🧹 Limpiados ${mockKeys.length} registros ficticios residuales de IndexedDB.`);
+            }
+        } catch (e) {
+            console.warn("Fallo purgando datos ficticios residuales de IndexedDB:", e);
+        }
+    }
+
+    // Purgar datos ficticios residuales de LocalStorage
+    const cachedLoc = localStorage.getItem("deliveries");
+    if (cachedLoc) {
+        try {
+            let cachedList = JSON.parse(cachedLoc);
+            const originalLen = cachedList.length;
+            cachedList = cachedList.filter(d => !(typeof d.id === 'string' && /^d\d+$/.test(d.id)));
+            if (cachedList.length !== originalLen) {
+                localStorage.setItem("deliveries", JSON.stringify(cachedList));
+                addSystemLog("🧹 Limpiados registros ficticios residuales de LocalStorage.");
+            }
+        } catch (e) {
+            console.error("Error al procesar LocalStorage cached deliveries:", e);
+        }
+    }
+
     // Intentar leer de base de datos local Dexie
     if (db) {
         try {
-            const count = await db.deliveries.count();
-            if (count === 0) {
-                await db.deliveries.bulkAdd(DEFAULT_DELIVERIES);
-                await db.shift.put(currentShift);
-                deliveries = [...DEFAULT_DELIVERIES];
-                addSystemLog("📦 Base de datos local sembrada con datos de WhatsApp.");
+            // Cargar entregas reales guardadas en IndexedDB
+            deliveries = await db.deliveries.toArray();
+            
+            // Inicializar turno si no existe o cargar
+            const storedShift = await db.shift.get("shift_today");
+            if (storedShift) {
+                currentShift = storedShift;
+                if (!currentShift.expenses_detail) {
+                    currentShift.expenses_detail = [];
+                }
             } else {
-                deliveries = await db.deliveries.toArray();
-                
-                // CHEQUEAR SI FALTAN PEDIDOS POR DEFECTO (Ej: los nuevos días del calendario)
-                let addedMissing = false;
-                for (const def of DEFAULT_DELIVERIES) {
-                    if (!deliveries.some(d => d.id === def.id)) {
-                        deliveries.push(def);
-                        await db.deliveries.put(def);
-                        addedMissing = true;
-                    }
-                }
-                if (addedMissing) {
-                    addSystemLog("📦 Sembrados nuevos pedidos simulados de calendario.");
-                }
-                
-                // MIGRACIÓN AUTOMÁTICA DE DATOS:
-                // Si el usuario recargó y tenía datos anteriores sin expected_items, sort_order o coordenadas,
-                // actualizamos en caliente usando los datos predeterminados.
-                let dataMigrated = false;
-                deliveries.forEach((d, idx) => {
-                    const def = DEFAULT_DELIVERIES.find(def => def.id === d.id);
-                    if (d.expected_items === undefined || d.expected_items === null) {
-                        d.expected_items = def ? def.expected_items : 1;
-                        d.collected_items = def ? def.expected_items : 1;
-                        dataMigrated = true;
-                    }
-                    if (d.sort_order === undefined || d.sort_order === null) {
-                        d.sort_order = def ? def.sort_order : idx * 10;
-                        dataMigrated = true;
-                    }
-                    if (d.latitude === undefined || d.latitude === null) {
-                        d.latitude = def ? def.latitude : null;
-                        d.longitude = def ? def.longitude : null;
-                        dataMigrated = true;
-                    }
-                });
-
-                if (dataMigrated) {
-                    await saveDeliveries();
-                    addSystemLog("🔧 Migración: Corregidos registros antiguos con sort_order y geolocalización.");
-                }
-
-                const storedShift = await db.shift.get("shift_today");
-                if (storedShift) {
-                    currentShift = storedShift;
-                    if (!currentShift.expenses_detail) {
-                        currentShift.expenses_detail = [];
-                    }
-                }
-                addSystemLog(`📦 Cargados ${deliveries.length} pedidos locales de IndexedDB.`);
+                await db.shift.put(currentShift);
             }
+            addSystemLog(`📦 Cargados ${deliveries.length} pedidos locales de IndexedDB.`);
         } catch (e) {
             console.error("Fallo inicializando base de datos local Dexie", e);
             loadLocalStorageFallback();
@@ -518,43 +183,7 @@ function loadLocalStorageFallback() {
     if (cached) {
         deliveries = JSON.parse(cached);
     } else {
-        deliveries = [...DEFAULT_DELIVERIES];
-        localStorage.setItem("deliveries", JSON.stringify(deliveries));
-    }
-
-    // Chequear si faltan pedidos por defecto (Ej: los nuevos días del calendario)
-    let addedMissingLoc = false;
-    for (const def of DEFAULT_DELIVERIES) {
-        if (!deliveries.some(d => d.id === def.id)) {
-            deliveries.push(def);
-            addedMissingLoc = true;
-        }
-    }
-    if (addedMissingLoc) {
-        localStorage.setItem("deliveries", JSON.stringify(deliveries));
-        addSystemLog("📦 Sembrados nuevos pedidos simulados en LocalStorage.");
-    }
-
-    // Migración para fallback de LocalStorage
-    let migrated = false;
-    deliveries.forEach((d, idx) => {
-        const def = DEFAULT_DELIVERIES.find(def => def.id === d.id);
-        if (d.expected_items === undefined || d.expected_items === null) {
-            d.expected_items = def ? def.expected_items : 1;
-            d.collected_items = def ? def.expected_items : 1;
-            migrated = true;
-        }
-        if (d.sort_order === undefined || d.sort_order === null) {
-            d.sort_order = def ? def.sort_order : idx * 10;
-            migrated = true;
-        }
-        if (d.latitude === undefined || d.latitude === null) {
-            d.latitude = def ? def.latitude : null;
-            d.longitude = def ? def.longitude : null;
-            migrated = true;
-        }
-    });
-    if (migrated) {
+        deliveries = [];
         localStorage.setItem("deliveries", JSON.stringify(deliveries));
     }
 
@@ -569,9 +198,10 @@ function loadLocalStorageFallback() {
 }
 
 // Variables y funciones del Calendario
-let currentDate = "2026-06-18";
-let viewYear = 2026;
-let viewMonth = 5; // Junio (0-indexado)
+let currentDate = todayDateStr;
+const todayDateObj = new Date();
+let viewYear = todayDateObj.getFullYear();
+let viewMonth = todayDateObj.getMonth();
 
 function renderCalendarStrip() {
     const strip = document.getElementById("calendar-strip");
