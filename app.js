@@ -2287,10 +2287,10 @@ function renderLocalidades() {
     setTimeout(updateLocalidadArrows, 100);
 }
 
-let touchStartX = 0;
-let touchEndX = 0;
-let touchStartY = 0;
-let touchEndY = 0;
+let swipeStartX = 0;
+let swipeEndX = 0;
+let swipeStartY = 0;
+let swipeEndY = 0;
 
 function initSwipeNavigation() {
     const container = document.getElementById("main-app-content");
@@ -2298,14 +2298,14 @@ function initSwipeNavigation() {
 
     // Detectar inicio de toque
     container.addEventListener('touchstart', e => {
-        touchStartX = e.changedTouches[0].screenX;
-        touchStartY = e.changedTouches[0].screenY;
+        swipeStartX = e.changedTouches[0].screenX;
+        swipeStartY = e.changedTouches[0].screenY;
     }, { passive: true });
 
     // Detectar fin de toque
     container.addEventListener('touchend', e => {
-        touchEndX = e.changedTouches[0].screenX;
-        touchEndY = e.changedTouches[0].screenY;
+        swipeEndX = e.changedTouches[0].screenX;
+        swipeEndY = e.changedTouches[0].screenY;
         handleSwipeGesture();
     }, { passive: true });
 }
@@ -2314,8 +2314,8 @@ function handleSwipeGesture() {
     const swipeThreshold = 80; // Distancia mínima en píxeles para detectar swipe
     const verticalThreshold = 40; // Ignorar si se desliza demasiado en vertical (ej. scrolling)
     
-    const diffX = touchEndX - touchStartX;
-    const diffY = touchEndY - touchStartY;
+    const diffX = swipeEndX - swipeStartX;
+    const diffY = swipeEndY - swipeStartY;
     
     if (Math.abs(diffY) > verticalThreshold) return; // Movimiento principalmente vertical
     if (Math.abs(diffX) < swipeThreshold) return;
