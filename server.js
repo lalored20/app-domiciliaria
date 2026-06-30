@@ -220,6 +220,49 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
 
 // Clasificación básica de Localidades
 function detectarLocalidad(direccion, lat, lon) {
+    if (direccion) {
+        const dirUpper = direccion.toUpperCase();
+        if (dirUpper.includes("USAQUEN") || dirUpper.includes("CEDRITOS") || dirUpper.includes("SANTA BARBARA") || dirUpper.includes("CANTALEJO")) {
+            return "Usaquén";
+        }
+        if (dirUpper.includes("SUBA") || dirUpper.includes("NIZA") || dirUpper.includes("ALHAMBRA") || dirUpper.includes("COLINA") || dirUpper.includes("PORTALES")) {
+            return "Suba";
+        }
+        if (dirUpper.includes("CHAPINERO") || dirUpper.includes("CHICO") || dirUpper.includes("ROSALES") || dirUpper.includes("RETIRO")) {
+            return "Chapinero";
+        }
+        if (dirUpper.includes("TEUSAQUILLO") || dirUpper.includes("SALITRE") || dirUpper.includes("GALERIAS") || dirUpper.includes("QUINTA PAREDES")) {
+            return "Teusaquillo";
+        }
+        if (dirUpper.includes("BARRIOS UNIDOS") || dirUpper.includes("CASTELLANA") || dirUpper.includes("METROPOLIS") || dirUpper.includes("POLO")) {
+            return "Barrios Unidos";
+        }
+        if (dirUpper.includes("ENGATIVA") || dirUpper.includes("BOCHICA") || dirUpper.includes("ALAMOS") || dirUpper.includes("MINUTO DE DIOS")) {
+            return "Engativá";
+        }
+        if (dirUpper.includes("FONTIBON") || dirUpper.includes("MODELIA") || dirUpper.includes("HAYUELOS") || dirUpper.includes("ZONA FRANCA")) {
+            return "Fontibón";
+        }
+        if (dirUpper.includes("KENNEDY") || dirUpper.includes("CASTILLA") || dirUpper.includes("AMERICAS") || dirUpper.includes("TINTAL") || dirUpper.includes("TIERRA BUENA") || dirUpper.includes("TIERRABUENA") || dirUpper.includes("PATIO BONITO")) {
+            return "Kennedy";
+        }
+        if (dirUpper.includes("BOSA") || dirUpper.includes("RECREO")) {
+            return "Bosa";
+        }
+        if (dirUpper.includes("PUENTE ARANDA") || dirUpper.includes("SALAZAR GOMEZ") || dirUpper.includes("MUZU")) {
+            return "Puente Aranda";
+        }
+        if (dirUpper.includes("USME") || dirUpper.includes("SAN ANTONIO ELIAS") || dirUpper.includes("SAN ANTONIO")) {
+            return "Usme";
+        }
+        if (dirUpper.includes("CIUDAD BOLIVAR") || dirUpper.includes("MADRIGAL")) {
+            return "Ciudad Bolívar";
+        }
+        if (dirUpper.includes("SAN CRISTOBAL") || dirUpper.includes("20 DE JULIO")) {
+            return "San Cristóbal";
+        }
+    }
+
     if (lat && lon) {
         const latitude = parseFloat(lat);
         const longitude = parseFloat(lon);
@@ -233,52 +276,11 @@ function detectarLocalidad(direccion, lat, lon) {
         if (latitude >= 4.59 && latitude <= 4.69) {
             if (longitude > -74.06) return "Chapinero";
             if (longitude <= -74.06 && longitude > -74.09) return "Teusaquillo";
-            if (longitude <= -74.09 && longitude > -74.13) return "Kennedy";
+            if (longitude <= -74.09 && longitude > -74.14) return "Kennedy";
             return "Bosa";
         }
     }
 
-    if (!direccion) return "Usaquén";
-    const dirUpper = direccion.toUpperCase();
-    if (dirUpper.includes("USAQUEN") || dirUpper.includes("CEDRITOS") || dirUpper.includes("SANTA BARBARA") || dirUpper.includes("CANTALEJO")) {
-        return "Usaquén";
-    }
-    if (dirUpper.includes("SUBA") || dirUpper.includes("NIZA") || dirUpper.includes("ALHAMBRA") || dirUpper.includes("COLINA") || dirUpper.includes("PORTALES")) {
-        return "Suba";
-    }
-    if (dirUpper.includes("CHAPINERO") || dirUpper.includes("CHICO") || dirUpper.includes("ROSALES") || dirUpper.includes("RETIRO")) {
-        return "Chapinero";
-    }
-    if (dirUpper.includes("TEUSAQUILLO") || dirUpper.includes("SALITRE") || dirUpper.includes("GALERIAS") || dirUpper.includes("QUINTA PAREDES")) {
-        return "Teusaquillo";
-    }
-    if (dirUpper.includes("BARRIOS UNIDOS") || dirUpper.includes("CASTELLANA") || dirUpper.includes("METROPOLIS") || dirUpper.includes("POLO")) {
-        return "Barrios Unidos";
-    }
-    if (dirUpper.includes("ENGATIVA") || dirUpper.includes("BOCHICA") || dirUpper.includes("ALAMOS") || dirUpper.includes("MINUTO DE DIOS")) {
-        return "Engativá";
-    }
-    if (dirUpper.includes("FONTIBON") || dirUpper.includes("MODELIA") || dirUpper.includes("HAYUELOS") || dirUpper.includes("ZONA FRANCA")) {
-        return "Fontibón";
-    }
-    if (dirUpper.includes("KENNEDY") || dirUpper.includes("CASTILLA") || dirUpper.includes("AMERICAS") || dirUpper.includes("TINTAL") || dirUpper.includes("TIERRA BUENA") || dirUpper.includes("TIERRABUENA") || dirUpper.includes("PATIO BONITO")) {
-        return "Kennedy";
-    }
-    if (dirUpper.includes("BOSA") || dirUpper.includes("RECREO")) {
-        return "Bosa";
-    }
-    if (dirUpper.includes("PUENTE ARANDA") || dirUpper.includes("SALAZAR GOMEZ") || dirUpper.includes("MUZU")) {
-        return "Puente Aranda";
-    }
-    if (dirUpper.includes("USME") || dirUpper.includes("SAN ANTONIO ELIAS") || dirUpper.includes("SAN ANTONIO")) {
-        return "Usme";
-    }
-    if (dirUpper.includes("CIUDAD BOLIVAR") || dirUpper.includes("MADRIGAL")) {
-        return "Ciudad Bolívar";
-    }
-    if (dirUpper.includes("SAN CRISTOBAL") || dirUpper.includes("20 DE JULIO")) {
-        return "San Cristóbal";
-    }
     return "Usaquén"; 
 }
 
@@ -343,7 +345,7 @@ function getMergedDeliveries() {
                         collected_items: meta.collected_items !== undefined ? meta.collected_items : expectedItems,
                         evidence_photo: meta.evidence_photo || null,
                         signature_drawn: meta.signature_drawn === 1,
-                        order_date: dateStr,
+                        order_date: meta.delivery_date || o.scheduledDate || dateStr,
                         sync_pending: false,
                         latitude: meta.latitude || null,
                         longitude: meta.longitude || null,
