@@ -1578,6 +1578,34 @@ function closeConfirmModal() {
     currentActiveDeliveryId = null;
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function extractDeliveryNotes(chatText) {
+    if (!chatText) return "Ninguna indicación especial encontrada en el chat.";
+    
+    const lines = chatText.split('\n');
+    const keywords = ['apto', 'apartamento', 'casa', 'piso', 'torre', 'bloque', 'conjunto', 'porteria', 'portería', 'timbre', 'timbrar', 'tocar', 'reja', 'esquina', 'local', 'indicacion', 'indicación', 'indicaciones'];
+    const matches = [];
+    
+    lines.forEach(line => {
+        const lower = line.toLowerCase();
+        if (keywords.some(keyword => lower.includes(keyword)) && !lower.includes('checkout.bold.co') && !lower.includes('pago')) {
+            const cleanLine = line.replace(/^\s*[-*•]\s*/, '').trim();
+            if (cleanLine.length > 5 && cleanLine.length < 150) {
+                matches.push(cleanLine);
+            }
+        }
+    });
+    
+    if (matches.length === 0) {
+        return "No se encontraron indicaciones especiales explícitas en el chat.";
+    }
+    return matches.map(m => `• ${m}`).join('\n');
+}
+
 function openChatTranscriptionModal(id) {
     const d = deliveries.find(item => item.id === id);
     if (!d) return;
@@ -1601,6 +1629,16 @@ function openChatTranscriptionModal(id) {
         addressEl.textContent = `Dirección: ${d.address}`;
     }
 
+    // Mostrar dirección original escrita por el cliente
+    const rawAddressEl = document.getElementById('chat-modal-raw-address') || (() => {
+        const el = document.createElement('div');
+        el.id = 'chat-modal-raw-address';
+        el.style.cssText = "font-size: 11px; color: var(--text-muted); margin-top: 4px; padding: 6px 8px; background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 6px; line-height: 1.3;";
+        addressEl.parentNode.insertBefore(el, addressEl.nextSibling);
+        return el;
+    })();
+    rawAddressEl.innerHTML = `<strong>📍 Dirección original escrita por el cliente:</strong><br/>"${escapeHtml(d.raw_address || d.address)}"`;
+
     document.getElementById('chat-modal-amount').textContent = `Valor: $${d.amount.toLocaleString()} (${d.pay_method})`;
 
     // Payment details
@@ -1613,12 +1651,30 @@ function openChatTranscriptionModal(id) {
         payDetailsEl.style.color = 'var(--text-muted)';
     }
 
+    // Resumen para Repartidor
+    const summaryBoxHtml = `
+        <div class="summary-route-box" style="margin-bottom: 12px; padding: 10px; background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 8px; font-size: 12px; color: var(--text-main); line-height: 1.4;">
+            <div style="font-weight: 700; color: var(--primary); margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">📌 RESUMEN CRÍTICO PARA RUTA</div>
+            <div style="margin-bottom: 6px;"><strong>📍 Dirección original:</strong> ${escapeHtml(d.raw_address || d.address)}</div>
+            <div style="margin-bottom: 6px;"><strong>👔 Prendas y servicios contratados:</strong>
+                ${d.items && d.items.length > 0 
+                    ? d.items.map(item => `<div style="padding-left: 10px; color: var(--secondary); margin-top: 2px;">• ${item.quantity}x ${escapeHtml(item.type)}</div>`).join('')
+                    : `<div style="padding-left: 10px; color: var(--text-muted);">• ${d.expected_items} prendas esperadas (Plan no especificado)</div>`
+                }
+            </div>
+            <div><strong>ℹ️ Indicaciones del Chat:</strong><div style="padding-left: 10px; font-style: italic; color: var(--text-muted); white-space: pre-line; margin-top: 2px;">${escapeHtml(extractDeliveryNotes(d.chat_transcription))}</div></div>
+        </div>
+    `;
+
     // Chat transcription
     const transcriptEl = document.getElementById('chat-modal-transcript');
     if (d.chat_transcription) {
-        transcriptEl.textContent = d.chat_transcription;
+        transcriptEl.innerHTML = summaryBoxHtml + `
+            <div style="font-weight:700; font-size:10px; color:var(--text-muted); text-transform:uppercase; margin-top:15px; margin-bottom:5px; border-top: 1px solid var(--border); padding-top: 10px;">💬 Historial del Chat Completo:</div>
+            <pre style="white-space: pre-wrap; font-family: inherit; font-size: 11px; margin: 0; color: var(--text-muted); line-height: 1.4;">${escapeHtml(d.chat_transcription)}</pre>
+        `;
     } else {
-        transcriptEl.innerHTML = `<span style="color:var(--text-muted); font-style:italic;">No hay transcripción de chat disponible para este despacho.</span>`;
+        transcriptEl.innerHTML = summaryBoxHtml + `<span style="color:var(--text-muted); font-style:italic;">No hay transcripción de chat disponible para este despacho.</span>`;
     }
 
     document.getElementById('chat-details-modal').style.display = 'flex';
