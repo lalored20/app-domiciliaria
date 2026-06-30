@@ -2260,13 +2260,15 @@ async function runBackgroundSync() {
                                     localItem.status = serverD.status;
                                     localChanged = true;
                                 }
-                                // Actualizar geolocalización, dirección y localidad resueltas siempre
-                                if (serverD.latitude && serverD.longitude && (
+                                // Actualizar siempre teléfono, geolocalización, dirección y localidad resueltas
+                                if (
+                                    localItem.client_phone !== serverD.client_phone ||
                                     localItem.latitude !== serverD.latitude ||
                                     localItem.longitude !== serverD.longitude ||
                                     localItem.address !== serverD.address ||
                                     localItem.localidad !== serverD.localidad
-                                )) {
+                                ) {
+                                    localItem.client_phone = serverD.client_phone;
                                     localItem.latitude = serverD.latitude;
                                     localItem.longitude = serverD.longitude;
                                     localItem.address = serverD.address;
