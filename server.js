@@ -36,6 +36,20 @@ const sqlite3 = require('sqlite3').verbose();
 const CHATBOT_DB_PATH = 'C:\\Users\\rmend\\Desktop\\Whatsapp Original\\data\\messages.db';
 const APP_DB_PATH = path.join(__dirname, 'domiciliaria.db');
 
+// Obtener fecha actual en formato local YYYY-MM-DD para Colombia (UTC-5)
+function getColombiaDateString() {
+    const options = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const formatter = new Intl.DateTimeFormat('fr-CA', options);
+    return formatter.format(new Date());
+}
+
+// Convertir un timestamp unix epoch a fecha local YYYY-MM-DD en Colombia
+function epochToColombiaDateString(epoch) {
+    const options = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const formatter = new Intl.DateTimeFormat('fr-CA', options);
+    return formatter.format(new Date(epoch * 1000));
+}
+
 // In-memory array for WhatsApp logs
 const whatsappLogs = [];
 
@@ -161,8 +175,8 @@ function getMergedDeliveries() {
                 
                 const merged = chatbotOrders.map(o => {
                     const meta = metadataMap[o.id] || {};
-                    // Convert unix epoch to YYYY-MM-DD
-                    const dateStr = new Date(o.created_at * 1000).toISOString().split('T')[0];
+                    // Convert unix epoch to YYYY-MM-DD in Colombia timezone
+                    const dateStr = epochToColombiaDateString(o.created_at);
                     const expectedItems = meta.expected_items !== undefined ? meta.expected_items : (o.items_count || 1);
                     
                     return {
@@ -294,7 +308,7 @@ app.post('/api/webhook/order', async (req, res) => {
                     prendasEsperadas,
                     latitude ? parseFloat(latitude) : null,
                     longitude ? parseFloat(longitude) : null,
-                    new Date().toISOString().split('T')[0],
+                    getColombiaDateString(),
                     nowEpoch
                 ], async (err) => {
                     if (err) {
@@ -317,7 +331,7 @@ app.post('/api/webhook/order', async (req, res) => {
                         collected_items: prendasEsperadas,
                         latitude: latitude ? parseFloat(latitude) : null,
                         longitude: longitude ? parseFloat(longitude) : null,
-                        delivery_date: new Date().toISOString().split('T')[0]
+                        delivery_date: getColombiaDateString()
                     };
 
                     console.log("📦 [Webhook] Orden guardada en SQLite local (messages.db & domiciliaria.db).");
@@ -410,7 +424,7 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     clientD.signature_drawn ? 1 : 0,
                     clientD.latitude || null,
                     clientD.longitude || null,
-                    clientD.order_date || new Date().toISOString().split('T')[0],
+                    clientD.order_date || getColombiaDateString(),
                     nowEpoch
                 ], (err) => {
                     if (err) {

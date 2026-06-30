@@ -60,11 +60,9 @@ let currentActiveDeliveryId = null;
 let currentCollectedItemsCount = 1;
 
 function getTodayDateString() {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
+    const options = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
+    const formatter = new Intl.DateTimeFormat('fr-CA', options); // 'fr-CA' outputs YYYY-MM-DD
+    return formatter.format(new Date());
 }
 
 const todayDateStr = getTodayDateString();
@@ -134,6 +132,17 @@ async function initApp() {
                 if (!currentShift.expenses_detail) {
                     currentShift.expenses_detail = [];
                 }
+                // Si el turno cargado es de un día anterior, lo reiniciamos para el nuevo día
+                if (currentShift.shift_date !== todayDateStr) {
+                    addSystemLog(`⏰ Nuevo día detectado. Rollover de turno de ${currentShift.shift_date} a ${todayDateStr}.`);
+                    currentShift.shift_date = todayDateStr;
+                    currentShift.collected_cash = 0;
+                    currentShift.expenses = 0;
+                    currentShift.expenses_detail = [];
+                    currentShift.status = "ABIERTO";
+                    currentShift.sync_pending = true;
+                    await db.shift.put(currentShift);
+                }
             } else {
                 await db.shift.put(currentShift);
             }
@@ -192,6 +201,14 @@ function loadLocalStorageFallback() {
         currentShift = JSON.parse(cachedShift);
         if (!currentShift.expenses_detail) {
             currentShift.expenses_detail = [];
+        }
+        if (currentShift.shift_date !== todayDateStr) {
+            currentShift.shift_date = todayDateStr;
+            currentShift.collected_cash = 0;
+            currentShift.expenses = 0;
+            currentShift.expenses_detail = [];
+            currentShift.status = "ABIERTO";
+            localStorage.setItem("shift", JSON.stringify(currentShift));
         }
     }
     addSystemLog("📦 Cargados datos locales desde LocalStorage Fallback.");
