@@ -571,6 +571,8 @@ function createDeliveryCard(d) {
         ? `📦 ${d.collected_items} prendas devueltas` 
         : `📦 ${d.expected_items} prendas esperadas`;
 
+    const isWarningAddress = d.address === 'Recogida WhatsApp';
+
     card.innerHTML = `
         <div class="card-header">
             <div style="display:flex; align-items:center; gap:8px;">
@@ -578,17 +580,23 @@ function createDeliveryCard(d) {
                 <div class="time-badge">
                     🕒 <span>${d.time_window}</span>
                 </div>
+                ${d.ticket_number ? `<span class="ticket-badge" style="background: rgba(139, 92, 246, 0.15); color: var(--primary); font-size: 11px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(139, 92, 246, 0.25);">🎟️ #${d.ticket_number}</span>` : ''}
             </div>
             <div class="status-pill ${statusClass}">${statusLabel}</div>
         </div>
         <div class="card-body">
-            <div class="client-name">${d.client_name}</div>
+            <div class="client-name" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <span>${d.client_name}</span>
+                ${d.chat_transcription ? `<button class="btn-chat-info" onclick="openChatTranscriptionModal('${d.id}')" style="background: rgba(92, 212, 255, 0.1); border: 1px solid rgba(92, 212, 255, 0.25); color: #5cd4ff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='rgba(92, 212, 255, 0.2)'" onmouseout="this.style.background='rgba(92, 212, 255, 0.1)'">💬 Detalle</button>` : ''}
+            </div>
             <div style="font-size:12px; font-weight:600; color:var(--secondary); margin-bottom: 2px;">
                 ${prendasText}
             </div>
             <div class="address-box">
                 <svg width="14" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                <span>${d.address}</span>
+                <span ${isWarningAddress ? 'style="color: var(--warning); font-weight: 700; background: rgba(239, 68, 68, 0.08); padding: 1px 4px; border-radius: 4px;"' : ''}>
+                    ${isWarningAddress ? '⚠️ ' + d.address : d.address}
+                </span>
             </div>
         </div>
         <div class="price-row">
@@ -1541,6 +1549,56 @@ function openConfirmModal(id) {
 function closeConfirmModal() {
     document.getElementById('confirm-modal').style.display = 'none';
     currentActiveDeliveryId = null;
+}
+
+function openChatTranscriptionModal(id) {
+    const d = deliveries.find(item => item.id === id);
+    if (!d) return;
+
+    document.getElementById('chat-modal-title').textContent = `Pedido #${d.ticket_number || 'N/A'}`;
+    
+    // Status pill style
+    const statusPill = document.getElementById('chat-modal-status');
+    statusPill.textContent = d.status === 'PENDIENTE' ? 'Pendiente' : (d.status === 'EN_RUTA' ? 'En Ruta' : 'Entregado');
+    statusPill.className = `status-pill ${d.status === 'PENDIENTE' ? 'pending' : (d.status === 'EN_RUTA' ? 'route' : 'delivered')}`;
+
+    document.getElementById('chat-modal-client-name').textContent = d.client_name;
+    document.getElementById('chat-modal-phone').textContent = `Celular: +${d.client_phone}`;
+    
+    // Highlight if address is placeholder "Recogida WhatsApp"
+    const isPlaceholder = d.address === 'Recogida WhatsApp';
+    const addressEl = document.getElementById('chat-modal-address');
+    if (isPlaceholder) {
+        addressEl.innerHTML = `Dirección: <span style="color:var(--warning); font-weight:700; background:rgba(239,68,68,0.1); padding:2px 6px; border-radius:4px;">⚠️ Recogida WhatsApp (No confirmada)</span>`;
+    } else {
+        addressEl.textContent = `Dirección: ${d.address}`;
+    }
+
+    document.getElementById('chat-modal-amount').textContent = `Valor: $${d.amount.toLocaleString()} (${d.pay_method})`;
+
+    // Payment details
+    const payDetailsEl = document.getElementById('chat-modal-payment-details');
+    if (d.payment_details) {
+        payDetailsEl.textContent = d.payment_details;
+        payDetailsEl.style.color = 'var(--text-main)';
+    } else {
+        payDetailsEl.textContent = "Sin detalles de pago específicos (Pago en punto o contraentrega).";
+        payDetailsEl.style.color = 'var(--text-muted)';
+    }
+
+    // Chat transcription
+    const transcriptEl = document.getElementById('chat-modal-transcript');
+    if (d.chat_transcription) {
+        transcriptEl.textContent = d.chat_transcription;
+    } else {
+        transcriptEl.innerHTML = `<span style="color:var(--text-muted); font-style:italic;">No hay transcripción de chat disponible para este despacho.</span>`;
+    }
+
+    document.getElementById('chat-details-modal').style.display = 'flex';
+}
+
+function closeChatDetailsModal() {
+    document.getElementById('chat-details-modal').style.display = 'none';
 }
 
 async function confirmDelivery() {

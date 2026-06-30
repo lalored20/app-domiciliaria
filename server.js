@@ -168,6 +168,7 @@ function getMergedDeliveries() {
                     return {
                         id: o.id,
                         chatbot_order_id: o.id,
+                        ticket_number: o.ticketNumber,
                         client_name: o.clientName,
                         client_phone: o.clientPhone.replace(/\D/g, ''),
                         address: o.clientAddress,
@@ -184,7 +185,9 @@ function getMergedDeliveries() {
                         order_date: dateStr,
                         sync_pending: false,
                         latitude: meta.latitude || null,
-                        longitude: meta.longitude || null
+                        longitude: meta.longitude || null,
+                        chat_transcription: o.chatTranscription || null,
+                        payment_details: o.paymentDetails || null
                     };
                 });
                 

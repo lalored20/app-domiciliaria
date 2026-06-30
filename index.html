@@ -144,6 +144,42 @@
             </div>
         </div>
 
+        <!-- Modal de Detalles del Pedido y Conversación (Chatbot) -->
+        <div class="modal" id="chat-details-modal">
+            <div class="modal-content" style="max-height: 85vh; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                    <h2 style="margin: 0; font-size: 18px;" id="chat-modal-title">Detalles del Pedido</h2>
+                    <span class="status-pill pending" id="chat-modal-status">Pendiente</span>
+                </div>
+                
+                <div style="overflow-y: auto; flex: 1; padding: 15px 0;" id="chat-modal-body">
+                    <!-- Información del Cliente -->
+                    <div style="margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                        <div style="font-weight: 700; font-size: 14px; margin-bottom: 5px;" id="chat-modal-client-name">Cliente</div>
+                        <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 3px;" id="chat-modal-phone">📞 Tel: 573...</div>
+                        <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 3px;" id="chat-modal-address">📍 Dir: Carrera...</div>
+                        <div style="font-size: 13px; color: var(--text-muted);" id="chat-modal-amount">💰 Valor: $0</div>
+                    </div>
+
+                    <!-- Detalles de Pago -->
+                    <div style="margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                        <div style="font-weight: 700; font-size: 13px; margin-bottom: 5px; color: var(--primary);">Detalles de Pago:</div>
+                        <div style="font-size: 12px; font-style: italic; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 6px; border: 1px dashed var(--border);" id="chat-modal-payment-details">Sin detalles de pago registrados.</div>
+                    </div>
+
+                    <!-- Transcripción del Chat -->
+                    <div>
+                        <div style="font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--secondary);">Transcripción de WhatsApp:</div>
+                        <div class="chat-transcript-container" id="chat-modal-transcript" style="font-size: 11px; line-height: 1.4; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 250px; overflow-y: auto; font-family: monospace; white-space: pre-wrap;"></div>
+                    </div>
+                </div>
+
+                <div class="modal-buttons" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 0;">
+                    <button class="btn btn-cancel" onclick="closeChatDetailsModal()" style="width: 100%;">Cerrar</button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
