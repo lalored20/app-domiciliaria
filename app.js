@@ -636,17 +636,50 @@ function createDeliveryCard(d) {
         `;
     }
 
-    // Alerta de direcciones distintas para el mismo cliente
-    const siblingAddresses = Array.from(new Set(siblingDeliveries.map(item => item.address).filter(Boolean)));
+    // Alerta de direcciones distintas para el mismo cliente (agrupadas por proximidad GPS)
+    const uniqueLocations = [];
+    siblingDeliveries.forEach(item => {
+        if (item.address === 'Recogida WhatsApp') return;
+        
+        let isNew = true;
+        for (const loc of uniqueLocations) {
+            if (item.latitude && item.longitude && loc.latitude && loc.longitude) {
+                const latDiff = Math.abs(item.latitude - loc.latitude);
+                const lngDiff = Math.abs(item.longitude - loc.longitude);
+                if (latDiff < 0.002 && lngDiff < 0.002) {
+                    isNew = false;
+                    break;
+                }
+            } else {
+                const cleanA = (item.raw_address || item.address || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+                const cleanB = (loc.display || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
+                    isNew = false;
+                    break;
+                }
+            }
+        }
+        if (isNew) {
+            let displayAddress = item.raw_address || item.address;
+            if (displayAddress && displayAddress.includes(",")) {
+                displayAddress = displayAddress.split(",")[0].trim();
+            }
+            uniqueLocations.push({
+                display: displayAddress,
+                latitude: item.latitude,
+                longitude: item.longitude
+            });
+        }
+    });
+
     let addressWarningHtml = "";
-    if (siblingAddresses.length > 1) {
+    if (uniqueLocations.length > 1) {
         addressWarningHtml = `
             <div class="address-warning-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 6px 10px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; color: #f87171; font-size: 11px; font-weight: 600; display: block; line-height: 1.4;">
-                ⚠️ <strong>Direcciones Distintas Hoy:</strong>
+                ⚠️ <strong>Direcciones distintas hoy:</strong>
                 <ul style="margin: 4px 0 0 12px; padding: 0; list-style-type: disc;">
-                    ${siblingAddresses.map(addr => `<li>${addr === d.address ? `<strong>${addr} (Este pedido)</strong>` : addr}</li>`).join('')}
+                    ${uniqueLocations.map(loc => `<li>${loc.display}</li>`).join('')}
                 </ul>
-                <span style="font-size: 9px; color: var(--text-muted); display: block; margin-top: 4px;">El repartidor debe ir a puntos de entrega/recogida diferentes para este cliente.</span>
             </div>
         `;
     }

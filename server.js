@@ -329,7 +329,7 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
             appDb.run(`
                 DELETE FROM delivery_metadata 
                 WHERE latitude IN (4.7011, 4.7250, 4.6675, 4.6432, 4.6669, 4.7012, 4.6738, 4.6307, 4.6186, 4.6205, 4.4600, 4.5300, 4.5600)
-                  AND resolved_address != 'Recogida WhatsApp'
+                  AND (resolved_address IS NULL OR resolved_address != 'Recogida WhatsApp')
             `, [], (err) => {
                 if (err) {
                     console.error("❌ Error limpiando fallbacks de geocodificación:", err.message);
