@@ -89,11 +89,11 @@ let hasSigned = false;
 async function initApp() {
     initSupabase();
 
-    // Purgar datos ficticios residuales si existen en Dexie (IDs que empiezan por "d" y terminan en número)
+    // Purgar datos ficticios residuales si existen en Dexie (IDs que empiezan por "d", "test_" o "web_")
     if (db) {
         try {
             const keys = await db.deliveries.toCollection().primaryKeys();
-            const mockKeys = keys.filter(k => typeof k === 'string' && /^d\d+$/.test(k));
+            const mockKeys = keys.filter(k => typeof k === 'string' && (/^d\d+$/.test(k) || k.startsWith('test_') || k.startsWith('web_')));
             if (mockKeys.length > 0) {
                 await db.deliveries.bulkDelete(mockKeys);
                 addSystemLog(`🧹 Limpiados ${mockKeys.length} registros ficticios residuales de IndexedDB.`);
@@ -109,7 +109,7 @@ async function initApp() {
         try {
             let cachedList = JSON.parse(cachedLoc);
             const originalLen = cachedList.length;
-            cachedList = cachedList.filter(d => !(typeof d.id === 'string' && /^d\d+$/.test(d.id)));
+            cachedList = cachedList.filter(d => !(typeof d.id === 'string' && (/^d\d+$/.test(d.id) || d.id.startsWith('test_') || d.id.startsWith('web_'))));
             if (cachedList.length !== originalLen) {
                 localStorage.setItem("deliveries", JSON.stringify(cachedList));
                 addSystemLog("🧹 Limpiados registros ficticios residuales de LocalStorage.");
