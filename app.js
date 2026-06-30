@@ -1541,6 +1541,25 @@ function openConfirmModal(id) {
             expectedInfo.textContent = `Esperadas según chatbot: ${prendasEsperadas} prendas`;
         }
 
+        const detailsList = document.getElementById("modal-items-details-list");
+        if (detailsList) {
+            if (d.items && d.items.length > 0) {
+                detailsList.style.display = "block";
+                detailsList.innerHTML = `
+                    <div style="font-weight: 700; color: var(--secondary); margin-bottom: 4px; border-bottom: 1px solid var(--border); padding-bottom: 3px; text-align: left;">👔 Artículos a Verificar:</div>
+                    ${d.items.map(item => `
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 500; text-align: left;">
+                            <span>• ${item.quantity}x ${escapeHtml(item.type)}</span>
+                            <span style="color: var(--text-muted);">$${item.price.toLocaleString()}</span>
+                        </div>
+                    `).join('')}
+                `;
+            } else {
+                detailsList.style.display = "none";
+                detailsList.innerHTML = "";
+            }
+        }
+
         // Resetear simuladores
         isQRScanActive = false;
         isPhotoCaptured = false;
