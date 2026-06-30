@@ -588,6 +588,15 @@ function createDeliveryCard(d) {
         ? `📦 ${d.collected_items} prendas devueltas` 
         : `📦 ${d.expected_items} prendas esperadas`;
 
+    let itemsDetailHtml = "";
+    if (d.items && d.items.length > 0) {
+        itemsDetailHtml = `
+            <div class="items-list-box" style="margin-top: 4px; margin-bottom: 6px; padding: 6px 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; color: var(--text-main);">
+                ${d.items.map(item => `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span>👔 ${item.quantity}x ${item.type}</span><span style="color:var(--text-muted); font-weight:500;">$${item.price.toLocaleString()}</span></div>`).join('')}
+            </div>
+        `;
+    }
+
     const isWarningAddress = d.address === 'Recogida WhatsApp';
 
     card.innerHTML = `
@@ -609,6 +618,7 @@ function createDeliveryCard(d) {
             <div style="font-size:12px; font-weight:600; color:var(--secondary); margin-bottom: 2px;">
                 ${prendasText}
             </div>
+            ${itemsDetailHtml}
             <div class="address-box">
                 <svg width="14" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                 <span ${isWarningAddress ? 'style="color: var(--warning); font-weight: 700; background: rgba(239, 68, 68, 0.08); padding: 1px 4px; border-radius: 4px;"' : ''}>
