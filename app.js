@@ -1085,6 +1085,8 @@ async function optimizeRouteByProximity(localidad, silent = false) {
             addSystemLog("ℹ️ No hay suficientes pedidos pendientes para optimizar.");
             alert("ℹ️ No hay suficientes pedidos pendientes para optimizar la ruta.");
         }
+        renderLocalidades();
+        renderContent();
         return;
     }
     
@@ -2160,6 +2162,12 @@ async function selectLocalidadTab(element, name) {
     
     // Auto-optimizar la ruta de la localidad seleccionada de forma silenciosa
     await optimizeRouteByProximity(currentLocalidad, true);
+    
+    // Siempre renderizar el contenido correspondiente a la localidad seleccionada
+    renderContent();
+    
+    // Y actualizar el estado de las flechas del selector
+    updateLocalidadArrows();
 }
 
 function renderTabs() {

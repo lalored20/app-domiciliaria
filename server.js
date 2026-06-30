@@ -496,8 +496,16 @@ app.post('/api/webhook/order', async (req, res) => {
 
                 // Insertar/actualizar metadatos en nuestra DB local
                 appDb.run(`
-                    INSERT OR REPLACE INTO delivery_metadata (order_id, time_window, expected_items, collected_items, latitude, longitude, delivery_date, updated_at)
+                    INSERT INTO delivery_metadata (order_id, time_window, expected_items, collected_items, latitude, longitude, delivery_date, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(order_id) DO UPDATE SET
+                        time_window = excluded.time_window,
+                        expected_items = excluded.expected_items,
+                        collected_items = excluded.collected_items,
+                        latitude = COALESCE(excluded.latitude, latitude),
+                        longitude = COALESCE(excluded.longitude, longitude),
+                        delivery_date = excluded.delivery_date,
+                        updated_at = excluded.updated_at
                 `, [
                     order_id,
                     time_window || "10:00 - 12:00",
@@ -607,11 +615,21 @@ app.post('/api/deliveries/sync', async (req, res) => {
                 
                 // 2. Guardar metadatos extendidos en nuestra domiciliaria.db
                 appDb.run(`
-                    INSERT OR REPLACE INTO delivery_metadata (
+                    INSERT INTO delivery_metadata (
                         order_id, time_window, expected_items, collected_items, 
                         evidence_photo, signature_drawn, latitude, longitude, 
                         delivery_date, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(order_id) DO UPDATE SET
+                        time_window = excluded.time_window,
+                        expected_items = excluded.expected_items,
+                        collected_items = excluded.collected_items,
+                        evidence_photo = COALESCE(excluded.evidence_photo, evidence_photo),
+                        signature_drawn = excluded.signature_drawn,
+                        latitude = COALESCE(excluded.latitude, latitude),
+                        longitude = COALESCE(excluded.longitude, longitude),
+                        delivery_date = excluded.delivery_date,
+                        updated_at = excluded.updated_at
                 `, [
                     clientD.id,
                     clientD.time_window || "10:00 - 12:00",
