@@ -625,36 +625,25 @@ function createDeliveryCard(d) {
         item.client_phone === d.client_phone
     );
     const siblingCount = siblingDeliveries.length;
-    let siblingBadgeHtml = "";
-    if (siblingCount > 1) {
-        const pend = siblingDeliveries.filter(item => item.status === 'PENDIENTE').length;
-        const route = siblingDeliveries.filter(item => item.status === 'EN_RUTA').length;
-        const deliv = siblingDeliveries.filter(item => item.status === 'ENTREGADO').length;
-        siblingBadgeHtml = `
-            <div class="sibling-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 4px 8px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 6px; color: var(--warning); font-size: 11px; font-weight: 700; display: block; line-height: 1.3;">
-                ⚠️ ${siblingCount} servicios hoy: ${pend} Pend. / ${route} Ruta / ${deliv} Entr.
-            </div>
-        `;
-    }
-
-    // Alerta de direcciones distintas para el mismo cliente (agrupadas por proximidad GPS)
+    // Alerta de direcciones distintas para el mismo cliente (agrupadas por proximidad GPS y texto)
     const uniqueLocations = [];
     siblingDeliveries.forEach(item => {
         if (item.address === 'Recogida WhatsApp') return;
         
         let isNew = true;
         for (const loc of uniqueLocations) {
+            // Comparar texto simplificado
+            const cleanA = (item.raw_address || item.address || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+            const cleanB = (loc.rawAddress || "").toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
+                isNew = false;
+                break;
+            }
+            // Comparar coordenadas GPS por proximidad
             if (item.latitude && item.longitude && loc.latitude && loc.longitude) {
                 const latDiff = Math.abs(item.latitude - loc.latitude);
                 const lngDiff = Math.abs(item.longitude - loc.longitude);
-                if (latDiff < 0.002 && lngDiff < 0.002) {
-                    isNew = false;
-                    break;
-                }
-            } else {
-                const cleanA = (item.raw_address || item.address || "").toLowerCase().replace(/[^a-z0-9]/g, '');
-                const cleanB = (loc.display || "").toLowerCase().replace(/[^a-z0-9]/g, '');
-                if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
+                if (latDiff < 0.003 && lngDiff < 0.003) {
                     isNew = false;
                     break;
                 }
@@ -667,20 +656,36 @@ function createDeliveryCard(d) {
             }
             uniqueLocations.push({
                 display: displayAddress,
+                rawAddress: item.raw_address || item.address,
                 latitude: item.latitude,
                 longitude: item.longitude
             });
         }
     });
 
-    let addressWarningHtml = "";
-    if (uniqueLocations.length > 1) {
-        addressWarningHtml = `
-            <div class="address-warning-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 4px 8px; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.15); border-radius: 6px; color: var(--warning); font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; line-height: 1.3;">
-                ⚠️ Tiene otro servicio en una dirección diferente hoy
-            </div>
-        `;
+    let siblingBadgeHtml = "";
+    if (siblingCount > 1) {
+        const pend = siblingDeliveries.filter(item => item.status === 'PENDIENTE').length;
+        const route = siblingDeliveries.filter(item => item.status === 'EN_RUTA').length;
+        
+        if (uniqueLocations.length > 1) {
+            // Direcciones diferentes hoy
+            siblingBadgeHtml = `
+                <div class="sibling-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 4px 8px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 6px; color: var(--warning); font-size: 11px; font-weight: 700; display: block; line-height: 1.3;">
+                    ⚠️ ${siblingCount} servs. hoy (${pend} Pend. / ${route} Ruta) • Dirección diferente
+                </div>
+            `;
+        } else {
+            // Mismo domicilio
+            siblingBadgeHtml = `
+                <div class="sibling-badge" style="margin-top: 4px; margin-bottom: 6px; padding: 4px 8px; background: rgba(139, 92, 246, 0.06); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 6px; color: var(--primary); font-size: 11px; font-weight: 700; display: block; line-height: 1.3;">
+                    👥 ${siblingCount} servs. hoy (${pend} Pend. / ${route} Ruta)
+                </div>
+            `;
+        }
     }
+
+    let addressWarningHtml = "";
 
     card.innerHTML = `
         <div class="card-header">
@@ -702,12 +707,11 @@ function createDeliveryCard(d) {
                 ${prendasText}
             </div>
             ${siblingBadgeHtml}
-            ${addressWarningHtml}
             ${itemsDetailHtml}
             <div class="address-box">
                 <svg width="14" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                 <span ${isWarningAddress ? 'style="color: var(--warning); font-weight: 700; background: rgba(239, 68, 68, 0.08); padding: 1px 4px; border-radius: 4px;"' : ''}>
-                    ${isWarningAddress ? '⚠️ ' + d.address : d.address}
+                    ${isWarningAddress ? '⚠️ ' + formatShortAddress(d.address) : formatShortAddress(d.address)}
                 </span>
             </div>
         </div>
@@ -1715,6 +1719,43 @@ function closeConfirmModal() {
     currentActiveDeliveryId = null;
 }
 
+function formatShortAddress(address) {
+    if (!address) return '';
+    if (address === 'Recogida WhatsApp') return '⚠️ Recogida WhatsApp';
+    
+    // Si no contiene comas, asumimos que es una dirección cruda ya corta
+    if (!address.includes(',')) {
+        return address.replace(/:$/, '').trim();
+    }
+    
+    const parts = address.split(',').map(p => p.trim());
+    const street = parts[0];
+    let neighborhood = parts[1] || '';
+    let locality = '';
+    
+    // Buscar la localidad en las partes
+    for (const part of parts) {
+        if (part.toLowerCase().includes('localidad')) {
+            locality = part.replace(/localidad/i, '').trim();
+            break;
+        }
+    }
+    
+    // Si la segunda parte es un código postal o "UPZs de Bogotá", buscar otra que sirva como barrio
+    if (neighborhood.toLowerCase().includes('upz') || /^\d+$/.test(neighborhood) || neighborhood.toLowerCase().includes('bogotá') || neighborhood.toLowerCase() === locality.toLowerCase()) {
+        neighborhood = '';
+    }
+    
+    let result = street;
+    if (neighborhood) {
+        result += `, ${neighborhood}`;
+    }
+    if (locality) {
+        result += ` (${locality})`;
+    }
+    return result;
+}
+
 function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -1856,15 +1897,20 @@ function openChatTranscriptionModal(id) {
         </div>
     `;
 
+    // Inyectar el resumen crítico de ruta en su propia sección limpia
+    const routeSummaryEl = document.getElementById('chat-modal-route-summary');
+    if (routeSummaryEl) {
+        routeSummaryEl.innerHTML = summaryBoxHtml;
+    }
+
     // Chat transcription
     const transcriptEl = document.getElementById('chat-modal-transcript');
     if (d.chat_transcription) {
-        transcriptEl.innerHTML = summaryBoxHtml + `
-            <div style="font-weight:700; font-size:10px; color:var(--text-muted); text-transform:uppercase; margin-top:15px; margin-bottom:5px; border-top: 1px solid var(--border); padding-top: 10px;">💬 Historial del Chat Completo:</div>
+        transcriptEl.innerHTML = `
             <pre style="white-space: pre-wrap; font-family: inherit; font-size: 11px; margin: 0; color: var(--text-muted); line-height: 1.4;">${escapeHtml(d.chat_transcription)}</pre>
         `;
     } else {
-        transcriptEl.innerHTML = summaryBoxHtml + `<span style="color:var(--text-muted); font-style:italic;">No hay transcripción de chat disponible para este despacho.</span>`;
+        transcriptEl.innerHTML = `<span style="color:var(--text-muted); font-style:italic;">No hay transcripción de chat disponible para este despacho.</span>`;
     }
 
     document.getElementById('chat-details-modal').style.display = 'flex';
