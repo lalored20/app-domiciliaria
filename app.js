@@ -2089,6 +2089,8 @@ async function deleteFacadePhoto(orderId, index) {
             item.sync_pending = true;
             await promiseWithTimeout(db.deliveries.put(item), 1500, "Dexie facade delete put timeout");
         }
+    } else {
+        await saveDeliveries();
     }
     
     triggerBackgroundSync();
@@ -2226,25 +2228,32 @@ function handleFacadePhoto(event) {
         list.push(base64);
         const newVal = JSON.stringify(list);
         
-        // Guardar la foto de inmediato para respuesta visual instantánea
-        await saveFacadeData(d.client_phone, newVal, null, null);
-        addSystemLog("🏡 Foto de fachada agregada exitosamente.");
+        let lat = null;
+        let lng = null;
         
-        // Luego obtener coordenadas GPS en segundo plano y actualizar
+        addSystemLog("📡 Obteniendo coordenadas satelitales...");
+        
+        // Obtener GPS antes de guardar para envío atómico
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const lat = position.coords.latitude;
-                    const lng = position.coords.longitude;
-                    await saveFacadeData(d.client_phone, null, lat, lng);
-                    addSystemLog("📡 Ubicación GPS actualizada.");
-                },
-                (error) => {
-                    console.warn("⚠️ Geolocalización no disponible en segundo plano:", error);
-                },
-                { enableHighAccuracy: true, timeout: 5000 }
-            );
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { 
+                        enableHighAccuracy: true, 
+                        timeout: 2500 
+                    });
+                });
+                lat = position.coords.latitude;
+                lng = position.coords.longitude;
+                addSystemLog(`📡 Coordenadas GPS obtenidas: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+            } catch (gpsErr) {
+                console.warn("⚠️ No se pudo obtener ubicación para la foto:", gpsErr);
+                addSystemLog("⚠️ Geolocalización no disponible. Guardando foto sin coordenadas nuevas.");
+            }
         }
+        
+        // Guardar foto y GPS juntos de forma atómica
+        await saveFacadeData(d.client_phone, newVal, lat, lng);
+        addSystemLog("🏡 Foto de fachada y GPS registrados exitosamente.");
     };
     reader.readAsDataURL(file);
     event.target.value = "";
@@ -2269,6 +2278,8 @@ async function saveFacadeData(clientPhone, photoBase64, lat, lng) {
             item.sync_pending = true;
             await promiseWithTimeout(db.deliveries.put(item), 1500, "Dexie facade save put timeout");
         }
+    } else {
+        await saveDeliveries();
     }
     
     triggerBackgroundSync();
