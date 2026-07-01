@@ -1128,3 +1128,51 @@ body.theme-glass .calendar-day.active.different-day {
     border-radius: 3px;
 }
 
+/* Animación de radar pulsante */
+@keyframes radar-pulse {
+    0% { transform: scale(0.9); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.4; }
+    100% { transform: scale(0.9); opacity: 1; }
+}
+.pulse-radar {
+    animation: radar-pulse 1.5s infinite ease-in-out;
+}
+/* Estilo para las fotos en galería de fachada */
+.facade-thumbnail {
+    position: relative;
+    width: 68px;
+    height: 68px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    cursor: zoom-in;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.facade-thumbnail:hover {
+    transform: scale(1.05);
+    border-color: var(--primary);
+}
+.facade-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.facade-thumbnail-remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    background: #ef4444;
+    color: white;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    z-index: 10;
+}
+

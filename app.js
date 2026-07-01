@@ -635,13 +635,14 @@ function createDeliveryCard(d) {
     card.className = `card ${d.status === 'EN_RUTA' ? 'active-route' : ''}`;
     card.setAttribute('data-id', d.id);
     
-    const hasFacade = d.facade_photo || (d.facade_latitude && d.facade_longitude);
+    const facadePhotos = getFacadePhotosList(d);
+    const hasFacade = facadePhotos.length > 0 || (d.facade_latitude && d.facade_longitude);
     let facadePillHtml = "";
     
     if (hasFacade) {
         facadePillHtml = `
             <div onclick="openFacadeModal(event, '${d.id}')" style="margin-top: 6px; padding: 6px 10px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(16, 185, 129, 0.15)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.08)'">
-                <span style="color: #10b981; font-weight: 700; display: flex; align-items: center; gap: 4px;">🏡 Fachada guardada (Foto + GPS)</span>
+                <span style="color: #10b981; font-weight: 700; display: flex; align-items: center; gap: 4px;">🏡 Fachada registrada (${facadePhotos.length} fotos + GPS)</span>
                 <span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">Ver ➔</span>
             </div>
         `;
@@ -1969,6 +1970,97 @@ function captureFacadeAndGPS(orderId) {
     }
 }
 
+function getFacadePhotosList(d) {
+    if (!d || !d.facade_photo) return [];
+    try {
+        const parsed = JSON.parse(d.facade_photo);
+        if (Array.isArray(parsed)) {
+            return parsed.filter(Boolean);
+        }
+    } catch (e) {}
+    if (typeof d.facade_photo === 'string' && d.facade_photo.trim() !== '') {
+        return [d.facade_photo];
+    }
+    return [];
+}
+
+async function deleteFacadePhoto(orderId, index) {
+    const d = deliveries.find(item => item.id === orderId);
+    if (!d) return;
+    
+    let list = getFacadePhotosList(d);
+    list.splice(index, 1);
+    
+    const newVal = list.length > 0 ? JSON.stringify(list) : null;
+    
+    deliveries.forEach(item => {
+        if (item.client_phone === d.client_phone) {
+            item.facade_photo = newVal;
+            item.sync_pending = true;
+        }
+    });
+    
+    if (db) {
+        const localItems = await db.deliveries.where('client_phone').equals(d.client_phone).toArray();
+        for (const item of localItems) {
+            item.facade_photo = newVal;
+            item.sync_pending = true;
+            await db.deliveries.put(item);
+        }
+    }
+    
+    syncData();
+    
+    const currentView = document.getElementById("main-app-content");
+    if (currentView) {
+        currentView.innerHTML = "";
+        renderDeliveriesView(currentView);
+    }
+    
+    openFacadeModal(null, orderId);
+    addSystemLog("🗑️ Foto de fachada eliminada.");
+}
+
+function captureRealtimeGps(event, orderId) {
+    if (event) event.stopPropagation();
+    
+    const d = deliveries.find(item => item.id === orderId);
+    if (!d) return;
+    
+    const statusEl = document.getElementById("facade-gps-status");
+    if (statusEl) {
+        statusEl.innerHTML = `
+            <span style="color: var(--primary); font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                <span class="pulse-radar" style="display: inline-block; width: 10px; height: 10px; background: var(--primary); border-radius: 50%;"></span>
+                Obteniendo ubicación satelital en tiempo real...
+            </span>
+        `;
+    }
+    
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                await saveFacadeData(d.client_phone, null, lat, lng);
+                addSystemLog("📡 Ubicación GPS obtenida e inscrita.");
+            },
+            (error) => {
+                console.warn("⚠️ Geolocalización fallida:", error);
+                if (statusEl) {
+                    statusEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">❌ Error al obtener GPS: ${error.message}</span>`;
+                }
+            },
+            { enableHighAccuracy: true, timeout: 8000 }
+        );
+    } else {
+        if (statusEl) {
+            statusEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">❌ Geolocalización no soportada.</span>`;
+        }
+    }
+}
+
 function handleFacadePhoto(event) {
     const file = event.target.files[0];
     if (!file || !activeFacadeOrderId) return;
@@ -1976,32 +2068,39 @@ function handleFacadePhoto(event) {
     const d = deliveries.find(item => item.id === activeFacadeOrderId);
     if (!d) return;
     
-    addSystemLog("⏳ Procesando foto de fachada y obteniendo GPS...");
+    addSystemLog("⏳ Procesando foto de fachada...");
     
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
         const base64 = e.target.result;
         
-        // Obtener coordenadas en tiempo real
+        // Obtener fotos actuales
+        let list = getFacadePhotosList(d);
+        if (list.length >= 4) {
+            alert("⚠️ Límite de 4 fotos de fachada alcanzado. Por favor elimina alguna para agregar una nueva.");
+            return;
+        }
+        list.push(base64);
+        const newVal = JSON.stringify(list);
+        
+        // Guardar la foto de inmediato para respuesta visual instantánea
+        await saveFacadeData(d.client_phone, newVal, null, null);
+        addSystemLog("🏡 Foto de fachada agregada exitosamente.");
+        
+        // Luego obtener coordenadas GPS en segundo plano y actualizar
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 async (position) => {
                     const lat = position.coords.latitude;
                     const lng = position.coords.longitude;
-                    
-                    await saveFacadeData(d.client_phone, base64, lat, lng);
-                    addSystemLog("🏡 Fachada y coordenadas GPS guardadas.");
+                    await saveFacadeData(d.client_phone, null, lat, lng);
+                    addSystemLog("📡 Ubicación GPS actualizada.");
                 },
-                async (error) => {
-                    console.warn("⚠️ Geolocalización denegada o no disponible:", error);
-                    await saveFacadeData(d.client_phone, base64, null, null);
-                    addSystemLog("🏡 Fachada guardada (GPS no disponible).");
+                (error) => {
+                    console.warn("⚠️ Geolocalización no disponible en segundo plano:", error);
                 },
-                { enableHighAccuracy: true, timeout: 10000 }
+                { enableHighAccuracy: true, timeout: 5000 }
             );
-        } else {
-            saveFacadeData(d.client_phone, base64, null, null);
-            addSystemLog("🏡 Fachada guardada (GPS no soportado).");
         }
     };
     reader.readAsDataURL(file);
@@ -2009,7 +2108,6 @@ function handleFacadePhoto(event) {
 }
 
 async function saveFacadeData(clientPhone, photoBase64, lat, lng) {
-    // 1. Actualizar en memoria local
     deliveries.forEach(item => {
         if (item.client_phone === clientPhone) {
             if (photoBase64) item.facade_photo = photoBase64;
@@ -2019,7 +2117,6 @@ async function saveFacadeData(clientPhone, photoBase64, lat, lng) {
         }
     });
     
-    // 2. Guardar en IndexedDB
     if (db) {
         const localItems = await db.deliveries.where('client_phone').equals(clientPhone).toArray();
         for (const item of localItems) {
@@ -2031,17 +2128,14 @@ async function saveFacadeData(clientPhone, photoBase64, lat, lng) {
         }
     }
     
-    // 3. Sincronizar inmediatamente
     syncData();
     
-    // 4. Re-renderizar la vista principal
     const currentView = document.getElementById("main-app-content");
     if (currentView) {
         currentView.innerHTML = "";
         renderDeliveriesView(currentView);
     }
     
-    // 5. Refrescar modal de fachada si estaba abierto
     if (activeFacadeOrderId) {
         openFacadeModal(null, activeFacadeOrderId);
     }
@@ -2052,44 +2146,79 @@ function openGpsMaps(lat, lng) {
     window.open(url, "_blank");
 }
 
-// Modal de detalles específicos de Fachada y GPS
 function openFacadeModal(event, orderId) {
-    if (event) event.stopPropagation(); // Evitar abrir otros eventos del card
+    if (event) event.stopPropagation();
     
     const d = deliveries.find(item => item.id === orderId);
     if (!d) return;
     
-    const hasPhoto = d.facade_photo && d.facade_photo.trim() !== "";
+    activeFacadeOrderId = orderId;
+    const photos = getFacadePhotosList(d);
     const hasGps = d.facade_latitude && d.facade_longitude;
     
-    let modalBodyHtml = `
-        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
-            <div style="text-align: left; width: 100%; font-size: 13px; color: var(--text-main); line-height: 1.5; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px; border: 1px solid var(--border); box-sizing: border-box;">
-                <div style="margin-bottom: 2px;"><strong>Cliente:</strong> ${escapeHtml(d.client_name)}</div>
-                <div style="margin-bottom: 2px;"><strong>Dirección:</strong> ${escapeHtml(d.address)}</div>
-                ${hasGps ? `<div><strong>GPS:</strong> ${d.facade_latitude.toFixed(6)}, ${d.facade_longitude.toFixed(6)}</div>` : ''}
-            </div>
-            
-            ${hasPhoto ? `
-                <div style="position: relative; width: 100%; max-height: 250px; border-radius: 12px; overflow: hidden; border: 2px solid var(--border); box-sizing: border-box;">
-                    <img src="${d.facade_photo}" onclick="openLightbox('${d.facade_photo}')" style="width: 100%; height: auto; max-height: 250px; object-fit: cover; cursor: zoom-in;" title="Ver fachada completa">
-                </div>
-            ` : `
-                <div style="padding: 20px; text-align: center; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 12px; width: 100%; box-sizing: border-box;">
-                    Sin foto de fachada guardada.
-                </div>
-            `}
-            
-            <div style="display: flex; gap: 8px; width: 100%; justify-content: center; flex-wrap: wrap; margin-top: 5px;">
-                ${hasGps ? `
-                    <button class="btn" onclick="openGpsMaps(${d.facade_latitude}, ${d.facade_longitude})" style="background: #10b981; border-color: #10b981; color: white; padding: 8px 16px; font-weight: 700; height: 35px; border-radius: 10px;">
-                        🗺️ Iniciar GPS Maps
-                    </button>
+    let photosGalleryHtml = "";
+    if (photos.length > 0) {
+        photosGalleryHtml = `
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; box-sizing: border-box; margin-bottom: 8px;">
+                ${photos.map((src, index) => `
+                    <div class="facade-thumbnail">
+                        <img src="${src}" onclick="openLightbox('${src}')" title="Ampliar imagen">
+                        <span class="facade-thumbnail-remove" onclick="deleteFacadePhoto('${d.id}', ${index})">×</span>
+                    </div>
+                `).join('')}
+                ${photos.length < 4 ? `
+                    <div onclick="captureFacadeAndGPS('${d.id}')" style="width: 68px; height: 68px; border: 1.5px dashed var(--primary); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--primary); cursor: pointer; font-size: 20px; transition: all 0.2s; background: rgba(255,255,255,0.02);" onmouseover="this.style.background='rgba(139,92,246,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                        ➕
+                    </div>
                 ` : ''}
-                <button class="btn" onclick="captureFacadeAndGPS('${d.id}')" style="background: rgba(139,92,246,0.1); border-color: var(--primary); color: var(--primary); padding: 8px 16px; font-weight: 700; height: 35px; border-radius: 10px;">
-                    📷 Actualizar Foto / GPS
-                </button>
             </div>
+        `;
+    } else {
+        photosGalleryHtml = `
+            <div onclick="captureFacadeAndGPS('${d.id}')" style="padding: 30px; text-align: center; color: var(--text-muted); border: 1.5px dashed var(--border); border-radius: 12px; width: 100%; box-sizing: border-box; cursor: pointer; transition: all 0.2s; background: rgba(255,255,255,0.01);" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+                <div style="font-size: 24px; margin-bottom: 6px;">📷</div>
+                <div style="font-size: 11px; font-weight: 600;">Tomar Fotos de Fachada</div>
+                <div style="font-size: 9px; color: var(--text-muted); margin-top: 2px;">(Toma hasta 4 fotos diferentes)</div>
+            </div>
+        `;
+    }
+    
+    let modalBodyHtml = `
+        <div style="display: flex; flex-direction: column; gap: 15px; align-items: center;">
+            
+            <!-- Datos del Cliente -->
+            <div style="text-align: left; width: 100%; font-size: 12px; color: var(--text-main); line-height: 1.5; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 12px; border: 1px solid var(--border); box-sizing: border-box; display: flex; flex-direction: column; gap: 4px;">
+                <div>👤 <strong>Cliente:</strong> ${escapeHtml(d.client_name)}</div>
+                <div>📍 <strong>Dirección:</strong> ${escapeHtml(d.address)}</div>
+            </div>
+            
+            <!-- Galería de Fotos -->
+            <div style="width: 100%; text-align: left;">
+                <div style="font-weight: 700; color: var(--primary); font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;">🏡 Fotos de Fachada y Casa</div>
+                ${photosGalleryHtml}
+            </div>
+            
+            <!-- Ubicación Satelital en Tiempo Real -->
+            <div style="width: 100%; text-align: left; padding: 12px; background: rgba(16, 185, 129, 0.03); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 12px; box-sizing: border-box;">
+                <div style="font-weight: 700; color: #10b981; font-size: 11px; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    🛰️ Ubicación GPS en Tiempo Real
+                </div>
+                <div id="facade-gps-status" style="font-size: 11px; color: var(--text-muted); line-height: 1.4; margin-bottom: 10px;">
+                    ${hasGps ? `📌 Coordenadas guardadas:<br/><strong style="color:var(--text-main); font-size:12px;">${d.facade_latitude.toFixed(6)}, ${d.facade_longitude.toFixed(6)}</strong>` : '❌ Sin coordenadas GPS de fachada registradas para este cliente.'}
+                </div>
+                
+                <div style="display: flex; gap: 8px; width: 100%; box-sizing: border-box;">
+                    <button class="btn" onclick="captureRealtimeGps(event, '${d.id}')" style="flex: 1; background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); color: #10b981; padding: 8px; font-size: 11px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: bold; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(16, 185, 129, 0.15)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.08)'">
+                        📍 Capturar GPS Actual
+                    </button>
+                    ${hasGps ? `
+                        <button class="btn" onclick="openGpsMaps(${d.facade_latitude}, ${d.facade_longitude})" style="flex: 1; background: #10b981; border-color: #10b981; color: white; padding: 8px; font-size: 11px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: bold; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                            🗺️ Iniciar Maps
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+            
         </div>
     `;
     
@@ -2106,7 +2235,7 @@ function closeFacadeModal() {
 }
 
 function captureFacadeAndGPSFromCard(event, orderId) {
-    if (event) event.stopPropagation(); // Evitar click propagations
+    if (event) event.stopPropagation();
     captureFacadeAndGPS(orderId);
 }
 
