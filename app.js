@@ -2920,12 +2920,13 @@ async function runBackgroundSync() {
             addSystemLog("🔄 Sync: Verificando datos con servidor local...");
             if (db) {
                 const localD = await db.deliveries.toArray();
+                const pendingD = localD.filter(d => d.sync_pending === true || d.sync_pending === 1);
                 
-                // Enviar cambios locales al servidor local
+                // Enviar solo cambios locales pendientes al servidor local
                 const response = await fetch("/api/deliveries/sync", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ deliveries: localD })
+                    body: JSON.stringify({ deliveries: pendingD })
                 });
                 
                 if (response.ok) {
@@ -2979,7 +2980,7 @@ async function runBackgroundSync() {
                         }
                         
                         // Quitar flag sync_pending si el servidor reconoció los cambios
-                        for (const d of localD) {
+                        for (const d of pendingD) {
                             if (d.sync_pending) {
                                 d.sync_pending = false;
                                 await db.deliveries.put(d);
