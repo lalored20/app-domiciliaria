@@ -3,18 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <script>
+        let isReportingError = false;
         window.onerror = function(message, source, lineno, colno, error) {
+            if (isReportingError) return false;
+            isReportingError = true;
+            
+            // Usar console.warn en lugar de console.error para no re-disparar el handler
+            console.warn("[Catcher] Reportando error del cliente al servidor...");
+            
             fetch('/api/log-error', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    error: message,
-                    url: source,
-                    line: lineno,
-                    col: colno,
+                    error: message || '',
+                    url: source || '',
+                    line: lineno || 0,
+                    col: colno || 0,
                     stack: error ? error.stack : ''
                 })
-            }).catch(e => console.error("Failed to report error:", e));
+            }).catch(function(e) {
+                // No loguear error con console.error aquí para evitar bucle infinito
+            }).finally(function() {
+                isReportingError = false;
+            });
             return false;
         };
     </script>
@@ -36,7 +47,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.30">
+    <link rel="stylesheet" href="styles.css?v=1.0.32">
 </head>
 <body class="theme-dark">
 
@@ -227,7 +238,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.30"></script>
+    <script src="app.js?v=1.0.32"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {
