@@ -1867,10 +1867,22 @@ function updateExtraGarmentComment(index, val) {
 
 function applyExtraQuickComment(index, val) {
     if (currentExtraGarmentsList[index]) {
-        currentExtraGarmentsList[index].comment = val;
+        let currentVal = (currentExtraGarmentsList[index].comment || "").trim();
+        let newVal = val;
+        
+        if (currentVal) {
+            // Si ya contiene el mismo tag rápido, no lo duplicamos
+            if (!currentVal.includes(val)) {
+                newVal = `${currentVal} - ${val}`;
+            } else {
+                newVal = currentVal;
+            }
+        }
+        
+        currentExtraGarmentsList[index].comment = newVal;
         const input = document.getElementById(`comment-extra-${index}`);
         if (input) {
-            input.value = val;
+            input.value = newVal;
         }
     }
 }
@@ -1948,10 +1960,23 @@ function applyQuickComment(orderId, itemType, commentValue) {
     if (!currentCollectedItemsCommentsMap) {
         currentCollectedItemsCommentsMap = {};
     }
-    currentCollectedItemsCommentsMap[key] = commentValue;
+    
+    let currentVal = (currentCollectedItemsCommentsMap[key] || "").trim();
+    let newVal = commentValue;
+    
+    if (currentVal) {
+        // Evitar duplicar la misma opción rápida
+        if (!currentVal.includes(commentValue)) {
+            newVal = `${currentVal} - ${commentValue}`;
+        } else {
+            newVal = currentVal;
+        }
+    }
+    
+    currentCollectedItemsCommentsMap[key] = newVal;
     const input = document.getElementById(`comment-${orderId}-${itemType}`);
     if (input) {
-        input.value = commentValue;
+        input.value = newVal;
     }
 }
 
