@@ -953,14 +953,18 @@ app.post('/api/deliveries/sync', async (req, res) => {
                                     resolvedLoc = geoRes.localidad;
                                     console.log(`✅ [Geocoder Satelital] Dirección de fachada resuelta para ${clientPhoneClean}: "${finalAddress}" [${resolvedLoc}]`);
                                     
-                                    // 1. Actualizar resolved_address y resolved_localidad en delivery_metadata de la orden
+                                    // 1. Insertar o actualizar resolved_address y resolved_localidad en delivery_metadata de la orden
                                     appDb.run(`
-                                        UPDATE delivery_metadata 
-                                        SET resolved_address = ?, resolved_localidad = ? 
-                                        WHERE order_id = ?
-                                    `, [finalAddress, resolvedLoc, clientD.id], (err) => {
+                                        INSERT INTO delivery_metadata (
+                                            order_id, resolved_address, resolved_localidad, updated_at
+                                        ) VALUES (?, ?, ?, ?)
+                                        ON CONFLICT(order_id) DO UPDATE SET
+                                            resolved_address = excluded.resolved_address,
+                                            resolved_localidad = excluded.resolved_localidad,
+                                            updated_at = excluded.updated_at
+                                    `, [clientD.id, finalAddress, resolvedLoc, nowEpoch], (err) => {
                                         if (err) {
-                                            console.error("❌ Error actualizando resolved_address en delivery_metadata:", err.message);
+                                            console.error("❌ Error haciendo UPSERT de resolved_address en delivery_metadata:", err.message);
                                         }
                                         // 2. Guardar en client_facade
                                         saveFacadeToDb(finalAddress, resolvedLoc);
