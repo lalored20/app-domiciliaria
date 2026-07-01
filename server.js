@@ -1202,10 +1202,16 @@ function startBackgroundGeocoding() {
                 let lon = null;
                 let isGps = false;
 
-                                const genericMatch = address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+                                let genericMatch = address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+                if (!genericMatch) {
+                    const latLngMatch = address.match(/lat\s*(-?\d+\.\d+).*?lng\s*(-?\d+\.\d+)/i);
+                    if (latLngMatch) {
+                        genericMatch = latLngMatch;
+                    }
+                }
                 const isUrlOrGps = address.toLowerCase().includes("maps") || address.toLowerCase().includes("gps") || address.startsWith("http") || address.includes("Ubicación");
                 
-                if (genericMatch && (isUrlOrGps || address.length < 50)) {
+                if (genericMatch && (isUrlOrGps || address.length < 100)) {
                     lat = parseFloat(genericMatch[1]);
                     lon = parseFloat(genericMatch[2]);
                     isGps = true;
