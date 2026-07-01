@@ -3280,12 +3280,16 @@ async function runBackgroundSync() {
                     }
                     
                     if (updatedCount > 0 || isUsingLocalStorage) {
-                        deliveries = localD;
                         if (updatedCount > 0) {
                             addSystemLog(`✅ Sync: Descargados ${updatedCount} nuevos pedidos desde el webhook.`);
                         }
                         renderLocalidades();
                         renderContent();
+                        
+                        // Si el modal de la fachada está abierto para una orden, re-renderizarlo para mostrar la dirección resuelta en vivo
+                        if (activeFacadeOrderId) {
+                            openFacadeModal(null, activeFacadeOrderId);
+                        }
                     }
                 }
             }
