@@ -1829,6 +1829,12 @@ function renderGarmentsVerificationTable() {
                     
                     <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
                         <input type="text" id="comment-extra-${index}" placeholder="Reportar detalle/novedad..." value="${escapeHtml(extra.comment)}" oninput="updateExtraGarmentComment(${index}, this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
+                        <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
+                            <span class="badge-quick" onclick="applyExtraQuickComment(${index}, '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
+                            <span class="badge-quick" onclick="applyExtraQuickComment(${index}, '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
+                            <span class="badge-quick" onclick="applyExtraQuickComment(${index}, '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
+                            <span class="badge-quick" onclick="applyExtraQuickComment(${index}, '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
+                        </div>
                     </div>
                 </td>
                 <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
@@ -1856,6 +1862,16 @@ function renderGarmentsVerificationTable() {
 function updateExtraGarmentComment(index, val) {
     if (currentExtraGarmentsList[index]) {
         currentExtraGarmentsList[index].comment = val;
+    }
+}
+
+function applyExtraQuickComment(index, val) {
+    if (currentExtraGarmentsList[index]) {
+        currentExtraGarmentsList[index].comment = val;
+        const input = document.getElementById(`comment-extra-${index}`);
+        if (input) {
+            input.value = val;
+        }
     }
 }
 
