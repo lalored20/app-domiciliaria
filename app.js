@@ -145,10 +145,13 @@ async function initApp() {
             
             // Inicializar turno si no existe o cargar
             const storedShift = await db.shift.get("shift_today");
-            if (storedShift) {
+            if (storedShift && typeof storedShift === 'object') {
                 currentShift = storedShift;
                 if (!currentShift.expenses_detail) {
                     currentShift.expenses_detail = [];
+                }
+                if (!currentShift.shift_date) {
+                    currentShift.shift_date = todayDateStr;
                 }
                 // Si el turno cargado es de un día anterior, lo reiniciamos para el nuevo día
                 if (currentShift.shift_date !== todayDateStr) {
@@ -176,13 +179,17 @@ async function initApp() {
     const activeTheme = localStorage.getItem("app-theme") || "theme-dark";
     setTheme(activeTheme);
 
-    // Sincronizar fecha inicial seleccionada con la fecha del turno actual
-    if (currentShift && currentShift.shift_date) {
-        currentDate = currentShift.shift_date;
-        const dateParts = currentDate.split('-');
+    // Sincronizar fecha inicial seleccionada con la fecha del turno actual de forma defensiva
+    if (currentShift && typeof currentShift.shift_date === 'string') {
+        const dateParts = currentShift.shift_date.split('-');
         if (dateParts.length === 3) {
-            viewYear = parseInt(dateParts[0]);
-            viewMonth = parseInt(dateParts[1]) - 1;
+            const parsedY = parseInt(dateParts[0]);
+            const parsedM = parseInt(dateParts[1]) - 1;
+            if (!isNaN(parsedY) && !isNaN(parsedM) && parsedM >= 0 && parsedM <= 11) {
+                currentDate = currentShift.shift_date;
+                viewYear = parsedY;
+                viewMonth = parsedM;
+            }
         }
     }
     
@@ -204,27 +211,45 @@ async function initApp() {
 
 function loadLocalStorageFallback() {
     const cached = localStorage.getItem("deliveries");
-    if (cached) {
+    try {
         deliveries = JSON.parse(cached);
-    } else {
+    } catch (e) {}
+    if (!Array.isArray(deliveries)) {
         deliveries = [];
-        localStorage.setItem("deliveries", JSON.stringify(deliveries));
+        localStorage.setItem("deliveries", JSON.stringify([]));
     }
 
     const cachedShift = localStorage.getItem("shift");
-    if (cachedShift) {
-        currentShift = JSON.parse(cachedShift);
-        if (!currentShift.expenses_detail) {
-            currentShift.expenses_detail = [];
-        }
-        if (currentShift.shift_date !== todayDateStr) {
-            currentShift.shift_date = todayDateStr;
-            currentShift.collected_cash = 0;
-            currentShift.expenses = 0;
-            currentShift.expenses_detail = [];
-            currentShift.status = "ABIERTO";
-            localStorage.setItem("shift", JSON.stringify(currentShift));
-        }
+    let parsedShift = null;
+    try {
+        parsedShift = JSON.parse(cachedShift);
+    } catch (e) {}
+    
+    if (parsedShift && typeof parsedShift === 'object') {
+        currentShift = parsedShift;
+    }
+    
+    if (!currentShift || !currentShift.shift_date) {
+        currentShift = {
+            id: "shift_today",
+            driver_name: "Ramón Mendoza",
+            initial_cash: 50000,
+            collected_cash: 0,
+            expenses: 0,
+            expenses_detail: [],
+            status: "ABIERTO",
+            shift_date: todayDateStr,
+            sync_pending: false
+        };
+    }
+    
+    if (currentShift.shift_date !== todayDateStr) {
+        currentShift.shift_date = todayDateStr;
+        currentShift.collected_cash = 0;
+        currentShift.expenses = 0;
+        currentShift.expenses_detail = [];
+        currentShift.status = "ABIERTO";
+        localStorage.setItem("shift", JSON.stringify(currentShift));
     }
     addSystemLog("📦 Cargados datos locales desde LocalStorage Fallback.");
 }
