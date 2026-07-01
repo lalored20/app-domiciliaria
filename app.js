@@ -3238,7 +3238,36 @@ async function runBackgroundSync() {
                     }
                     
                     if (isUsingLocalStorage) {
-                        deliveries = localD;
+                        const currentLocalStorageD = JSON.parse(localStorage.getItem("deliveries") || "[]");
+                        
+                        localD.forEach(item => {
+                            const inFlightItem = currentLocalStorageD.find(x => x.id === item.id);
+                            if (inFlightItem && inFlightItem.sync_pending) {
+                                // Evitar sobreescribir si hubo cambios locales "en vuelo"
+                                return;
+                            }
+                            const idx = currentLocalStorageD.findIndex(x => x.id === item.id);
+                            if (idx !== -1) {
+                                currentLocalStorageD[idx] = item;
+                            } else {
+                                currentLocalStorageD.push(item);
+                            }
+                        });
+                        
+                        deliveries = currentLocalStorageD;
+                        
+                        // Re-asociar fotos para asegurar que la memoria de la aplicacion este completa
+                        deliveries.forEach(d => {
+                            if (d) {
+                                const storedFacade = localStorage.getItem("photo_facade_" + d.client_phone);
+                                if (storedFacade) d.facade_photo = storedFacade;
+                                
+                                const storedEvidence = localStorage.getItem("photo_evidence_" + d.id);
+                                if (storedEvidence) d.evidence_photo = storedEvidence;
+                            }
+                        });
+                        
+                        // Guardar la version limpia a LocalStorage (delegando en saveDeliveries)
                         await saveDeliveries();
                     }
                     
