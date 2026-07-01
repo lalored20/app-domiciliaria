@@ -3249,14 +3249,30 @@ async function runBackgroundSync() {
                         const currentLocalStorageD = JSON.parse(localStorage.getItem("deliveries") || "[]");
                         
                         localD.forEach(item => {
-                            const inFlightItem = currentLocalStorageD.find(x => x.id === item.id);
-                            if (inFlightItem && inFlightItem.sync_pending) {
-                                // Evitar sobreescribir si hubo cambios locales "en vuelo"
-                                return;
-                            }
                             const idx = currentLocalStorageD.findIndex(x => x.id === item.id);
                             if (idx !== -1) {
-                                currentLocalStorageD[idx] = item;
+                                const localItem = currentLocalStorageD[idx];
+                                
+                                // Mezcla Inteligente: Si local está "Por confirmar" pero el servidor resolvió los datos reales, los actualizamos de inmediato
+                                const localNameUnconfirmed = !localItem.client_name || localItem.client_name.toLowerCase().includes("confirmar") || localItem.client_name.trim() === "";
+                                const serverNameConfirmed = item.client_name && !item.client_name.toLowerCase().includes("confirmar") && item.client_name.trim() !== "";
+                                if (localNameUnconfirmed && serverNameConfirmed) {
+                                    localItem.client_name = item.client_name;
+                                }
+                                
+                                const localAddrUnconfirmed = !localItem.address || localItem.address.toLowerCase().includes("confirmar") || localItem.address.trim() === "";
+                                const serverAddrConfirmed = item.address && !item.address.toLowerCase().includes("confirmar") && item.address.trim() !== "";
+                                if (localAddrUnconfirmed && serverAddrConfirmed) {
+                                    localItem.address = item.address;
+                                }
+                                
+                                // Para el resto de campos (estados, fotos, coordenadas), protegemos si hay cambios locales "en vuelo"
+                                if (!localItem.sync_pending) {
+                                    localItem.status = item.status;
+                                    localItem.facade_photo = item.facade_photo;
+                                    localItem.facade_latitude = item.facade_latitude;
+                                    localItem.facade_longitude = item.facade_longitude;
+                                }
                             } else {
                                 currentLocalStorageD.push(item);
                             }
@@ -3264,7 +3280,7 @@ async function runBackgroundSync() {
                         
                         deliveries = currentLocalStorageD;
                         
-                        // Re-asociar fotos para asegurar que la memoria de la aplicacion este completa
+                        // Re-asociar fotos para asegurar que la memoria de la aplicación esté completa
                         deliveries.forEach(d => {
                             if (d) {
                                 const storedFacade = localStorage.getItem("photo_facade_" + d.client_phone);
@@ -3275,7 +3291,7 @@ async function runBackgroundSync() {
                             }
                         });
                         
-                        // Guardar la version limpia a LocalStorage (delegando en saveDeliveries)
+                        // Guardar la versión limpia a LocalStorage
                         await saveDeliveries();
                     }
                     
