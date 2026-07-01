@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.12">
+    <link rel="stylesheet" href="styles.css?v=1.0.13">
 </head>
 <body class="theme-dark">
 
@@ -110,6 +110,26 @@
                     <label>Control de Prendas (Verificación Manual)</label>
                     <div id="modal-garments-verification-table" style="margin-top: 5px;"></div>
                     <div id="modal-items-count-summary" style="font-size: 11px; margin-top: 6px; text-align: center; color: var(--text-muted); font-weight: 500;"></div>
+                    
+                    <!-- Botón e inline form para agregar prenda extra manualmente -->
+                    <div style="text-align: right; margin-top: 6px;">
+                        <span id="btn-add-extra-garment" style="font-size: 11px; color: var(--primary); cursor: pointer; font-weight: bold; display: inline-flex; align-items: center; gap: 4px;" onclick="showAddExtraGarmentForm()">
+                            ➕ Agregar prenda no registrada
+                        </span>
+                    </div>
+                    
+                    <div id="extra-garment-form" style="display: none; background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 8px; padding: 10px; margin-top: 8px; text-align: left;">
+                        <div style="font-weight: 700; font-size: 11px; color: var(--primary); margin-bottom: 6px; text-transform: uppercase;">Agregar prenda no registrada</div>
+                        <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                            <input type="text" id="extra-garment-name" placeholder="Nombre (ej. Vestido rojo)" style="flex: 2; padding: 6px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); outline: none;">
+                            <input type="number" id="extra-garment-qty" placeholder="Cant" min="1" value="1" style="width: 55px; padding: 6px 4px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); text-align: center; outline: none;">
+                        </div>
+                        <input type="text" id="extra-garment-comment" placeholder="Novedad/Especificación (ej. Llegó de más)" style="width: 100%; padding: 6px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); outline: none; margin-bottom: 6px; box-sizing: border-box;">
+                        <div style="display: flex; justify-content: flex-end; gap: 6px;">
+                            <button class="btn" onclick="hideAddExtraGarmentForm()" style="padding: 4px 10px; font-size: 10px; background: transparent; border-color: var(--border); height: auto; line-height: 1.2;">Cancelar</button>
+                            <button class="btn" onclick="addExtraGarmentToVerification()" style="padding: 4px 10px; font-size: 10px; background: var(--primary); border-color: var(--primary); color: white; height: auto; line-height: 1.2;">Agregar</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Firma Digital Canvas -->
@@ -171,7 +191,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.12"></script>
+    <script src="app.js?v=1.0.13"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {

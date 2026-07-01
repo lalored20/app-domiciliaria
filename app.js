@@ -1684,6 +1684,8 @@ function adjustGroupedItemCount(orderId, itemType, direction) {
     updateGroupedItemsSummary();
 }
 
+let currentExtraGarmentsList = [];
+
 function updateGroupedItemsSummary() {
     const ids = currentActiveDeliveryId.split(',');
     const groupItems = deliveries.filter(item => ids.includes(item.id));
@@ -1705,6 +1707,11 @@ function updateGroupedItemsSummary() {
         }
     });
     
+    // Sumar prendas extras
+    currentExtraGarmentsList.forEach(extra => {
+        totalCollected += extra.quantity;
+    });
+    
     const summaryEl = document.getElementById("modal-items-count-summary");
     if (summaryEl) {
         if (totalCollected !== totalExpected) {
@@ -1717,6 +1724,199 @@ function updateGroupedItemsSummary() {
     }
     
     currentCollectedItemsCount = totalCollected;
+}
+
+function renderGarmentsVerificationTable() {
+    const ids = currentActiveDeliveryId.split(',');
+    const groupItems = deliveries.filter(d => ids.includes(d.id));
+    
+    let tableHtml = `
+        <table style="width:100%; border-collapse:collapse; font-size:12px; color:var(--text-main); text-align:left; margin-top:8px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border); font-weight:700; color:var(--text-muted); font-size:11px;">
+                    <th style="padding:6px 4px; width:55px;">Pedido</th>
+                    <th style="padding:6px 4px;">Detalles de la Prenda & Novedades</th>
+                    <th style="padding:6px 4px; text-align:center; width:90px;">Conteo</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    // 1. Originales
+    groupItems.forEach(item => {
+        if (item.items && item.items.length > 0) {
+            item.items.forEach(sub => {
+                const key = `${item.id}_${sub.type}`;
+                if (currentCollectedItemsMap[key] === undefined) {
+                    currentCollectedItemsMap[key] = sub.quantity;
+                }
+                const count = currentCollectedItemsMap[key];
+                const comment = currentCollectedItemsCommentsMap[key] || "";
+                tableHtml += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                        <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:top; padding-top:12px;">#${item.ticket_number || 'N/A'}</td>
+                        <td style="padding:8px 4px; vertical-align:top;">
+                            <div style="font-weight:600; font-size:12px;">${escapeHtml(sub.type)}</div>
+                            <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Esperadas: ${sub.quantity} ud.</div>
+                            
+                            <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+                                <input type="text" id="comment-${item.id}-${escapeHtml(sub.type)}" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', '${escapeHtml(sub.type)}', this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
+                                <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
+                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
+                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
+                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
+                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
+                            <div style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-input); padding:2px 6px; border-radius:8px; border:1px solid var(--border);">
+                                <button class="btn" onclick="adjustGroupedItemCount('${item.id}', '${escapeHtml(sub.type)}', -1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">-</button>
+                                <span id="count-${item.id}-${escapeHtml(sub.type)}" style="font-weight:700; font-size:12px; min-width:18px; text-align:center; color:var(--text-main);">${count}</span>
+                                <button class="btn" onclick="adjustGroupedItemCount('${item.id}', '${escapeHtml(sub.type)}', 1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">+</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        } else {
+            const key = `${item.id}_prendas_generales`;
+            if (currentCollectedItemsMap[key] === undefined) {
+                currentCollectedItemsMap[key] = item.expected_items || 1;
+            }
+            const count = currentCollectedItemsMap[key];
+            const comment = currentCollectedItemsCommentsMap[key] || "";
+            tableHtml += `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                    <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:top; padding-top:12px;">#${item.ticket_number || 'N/A'}</td>
+                    <td style="padding:8px 4px; vertical-align:top;">
+                        <div style="font-weight:600; font-size:12px;">Prendas Generales</div>
+                        <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Esperadas: ${item.expected_items || 1} ud.</div>
+                        
+                        <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+                            <input type="text" id="comment-${item.id}-prendas_generales" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', 'prendas_generales', this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
+                            <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
+                                <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
+                                <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
+                                <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
+                                <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
+                        <div style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-input); padding:2px 6px; border-radius:8px; border:1px solid var(--border);">
+                            <button class="btn" onclick="adjustGroupedItemCount('${item.id}', 'prendas_generales', -1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">-</button>
+                            <span id="count-${item.id}-prendas_generales" style="font-weight:700; font-size:12px; min-width:18px; text-align:center; color:var(--text-main);">${count}</span>
+                            <button class="btn" onclick="adjustGroupedItemCount('${item.id}', 'prendas_generales', 1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">+</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+    });
+    
+    // 2. Extras
+    currentExtraGarmentsList.forEach((extra, index) => {
+        tableHtml += `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03); background: rgba(139,92,246,0.02);">
+                <td style="padding:8px 4px; font-weight:700; color:var(--secondary); vertical-align:top; padding-top:12px;">Extra</td>
+                <td style="padding:8px 4px; vertical-align:top;">
+                    <div style="font-weight:700; font-size:12px; color:var(--text-main); display:flex; align-items:center; gap:4px;">
+                        <span>${escapeHtml(extra.type)}</span>
+                        <span onclick="removeExtraGarment(${index})" style="color:#ef4444; font-size:10px; cursor:pointer; font-weight:bold; margin-left:6px;">[Quitar]</span>
+                    </div>
+                    <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Añadida manualmente</div>
+                    
+                    <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+                        <input type="text" id="comment-extra-${index}" placeholder="Reportar detalle/novedad..." value="${escapeHtml(extra.comment)}" oninput="updateExtraGarmentComment(${index}, this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
+                    </div>
+                </td>
+                <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
+                    <div style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-input); padding:2px 6px; border-radius:8px; border:1px solid var(--border);">
+                        <button class="btn" onclick="adjustExtraGarmentCount(${index}, -1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">-</button>
+                        <span id="count-extra-${index}" style="font-weight:700; font-size:12px; min-width:18px; text-align:center; color:var(--text-main);">${extra.quantity}</span>
+                        <button class="btn" onclick="adjustExtraGarmentCount(${index}, 1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">+</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tableHtml += `
+            </tbody>
+        </table>
+    `;
+    
+    const tableDiv = document.getElementById("modal-garments-verification-table");
+    if (tableDiv) tableDiv.innerHTML = tableHtml;
+    
+    updateGroupedItemsSummary();
+}
+
+function updateExtraGarmentComment(index, val) {
+    if (currentExtraGarmentsList[index]) {
+        currentExtraGarmentsList[index].comment = val;
+    }
+}
+
+function adjustExtraGarmentCount(index, dir) {
+    if (currentExtraGarmentsList[index]) {
+        currentExtraGarmentsList[index].quantity += dir;
+        if (currentExtraGarmentsList[index].quantity < 0) {
+            currentExtraGarmentsList[index].quantity = 0;
+        }
+        renderGarmentsVerificationTable();
+    }
+}
+
+function removeExtraGarment(index) {
+    currentExtraGarmentsList.splice(index, 1);
+    renderGarmentsVerificationTable();
+    addSystemLog("👔 Prenda manual eliminada.");
+}
+
+function showAddExtraGarmentForm() {
+    const form = document.getElementById("extra-garment-form");
+    if (form) {
+        form.style.display = "block";
+        document.getElementById("extra-garment-name").focus();
+    }
+}
+
+function hideAddExtraGarmentForm() {
+    const form = document.getElementById("extra-garment-form");
+    if (form) {
+        form.style.display = "none";
+        document.getElementById("extra-garment-name").value = "";
+        document.getElementById("extra-garment-qty").value = "1";
+        document.getElementById("extra-garment-comment").value = "";
+    }
+}
+
+function addExtraGarmentToVerification() {
+    const nameInput = document.getElementById("extra-garment-name");
+    const qtyInput = document.getElementById("extra-garment-qty");
+    const commentInput = document.getElementById("extra-garment-comment");
+    
+    const name = nameInput.value.trim();
+    const qty = parseInt(qtyInput.value) || 1;
+    const comment = commentInput.value.trim() || "✅ Prenda adicionada en sitio";
+    
+    if (!name) {
+        alert("Por favor, ingresa el nombre de la prenda.");
+        return;
+    }
+    
+    currentExtraGarmentsList.push({
+        type: name,
+        quantity: qty,
+        comment: comment,
+        tempId: 'extra_' + Date.now()
+    });
+    
+    addSystemLog(`👔 Prenda manual añadida: ${qty}x ${name}`);
+    renderGarmentsVerificationTable();
+    hideAddExtraGarmentForm();
 }
 
 function updateItemComment(orderId, itemType, commentValue) {
@@ -1771,9 +1971,11 @@ function openConfirmModal(id) {
         const totalAmt = groupItems.reduce((sum, item) => sum + (item.amount || 0), 0);
         document.getElementById('modal-amount').textContent = "$" + totalAmt.toLocaleString();
         
-        // Inicializar mapas de conteo y comentarios
+        // Inicializar mapas de conteo, comentarios y lista de prendas extras
         currentCollectedItemsMap = {};
         currentCollectedItemsCommentsMap = {};
+        currentExtraGarmentsList = [];
+        hideAddExtraGarmentForm();
         
         groupItems.forEach(item => {
             let parsedComments = {};
@@ -1789,93 +1991,8 @@ function openConfirmModal(id) {
             });
         });
 
-        let tableHtml = `
-            <table style="width:100%; border-collapse:collapse; font-size:12px; color:var(--text-main); text-align:left; margin-top:8px;">
-                <thead>
-                    <tr style="border-bottom: 1px solid var(--border); font-weight:700; color:var(--text-muted); font-size:11px;">
-                        <th style="padding:6px 4px; width:55px;">Pedido</th>
-                        <th style="padding:6px 4px;">Detalles de la Prenda & Novedades</th>
-                        <th style="padding:6px 4px; text-align:center; width:90px;">Conteo</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        
-        groupItems.forEach(item => {
-            if (item.items && item.items.length > 0) {
-                item.items.forEach(sub => {
-                    const key = `${item.id}_${sub.type}`;
-                    currentCollectedItemsMap[key] = sub.quantity; // Por defecto el esperado
-                    const comment = currentCollectedItemsCommentsMap[key] || "";
-                    tableHtml += `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                            <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:top; padding-top:12px;">#${item.ticket_number || 'N/A'}</td>
-                            <td style="padding:8px 4px; vertical-align:top;">
-                                <div style="font-weight:600; font-size:12px;">${escapeHtml(sub.type)}</div>
-                                <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Esperadas: ${sub.quantity} ud.</div>
-                                
-                                <!-- Comentarios rápidos -->
-                                <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-                                    <input type="text" id="comment-${item.id}-${escapeHtml(sub.type)}" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', '${escapeHtml(sub.type)}', this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
-                                    <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
-                                        <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
-                                        <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
-                                        <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
-                                        <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
-                                <div style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-input); padding:2px 6px; border-radius:8px; border:1px solid var(--border);">
-                                    <button class="btn" onclick="adjustGroupedItemCount('${item.id}', '${escapeHtml(sub.type)}', -1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">-</button>
-                                    <span id="count-${item.id}-${escapeHtml(sub.type)}" style="font-weight:700; font-size:12px; min-width:18px; text-align:center; color:var(--text-main);">${sub.quantity}</span>
-                                    <button class="btn" onclick="adjustGroupedItemCount('${item.id}', '${escapeHtml(sub.type)}', 1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">+</button>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                });
-            } else {
-                const key = `${item.id}_prendas_generales`;
-                const expected = item.expected_items || 1;
-                currentCollectedItemsMap[key] = expected;
-                const comment = currentCollectedItemsCommentsMap[key] || "";
-                tableHtml += `
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                        <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:top; padding-top:12px;">#${item.ticket_number || 'N/A'}</td>
-                        <td style="padding:8px 4px; vertical-align:top;">
-                            <div style="font-weight:600; font-size:12px;">Prendas Generales</div>
-                            <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Esperadas: ${expected} ud.</div>
-                            
-                            <!-- Comentarios rápidos -->
-                            <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-                                <input type="text" id="comment-${item.id}-prendas_generales" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', 'prendas_generales', this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
-                                <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
-                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
-                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
-                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
-                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
-                                </div>
-                            </div>
-                        </td>
-                        <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
-                            <div style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-input); padding:2px 6px; border-radius:8px; border:1px solid var(--border);">
-                                <button class="btn" onclick="adjustGroupedItemCount('${item.id}', 'prendas_generales', -1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">-</button>
-                                <span id="count-${item.id}-prendas_generales" style="font-weight:700; font-size:12px; min-width:18px; text-align:center; color:var(--text-main);">${expected}</span>
-                                <button class="btn" onclick="adjustGroupedItemCount('${item.id}', 'prendas_generales', 1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">+</button>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-            }
-        });
-        
-        tableHtml += `
-                </tbody>
-            </table>
-        `;
-        document.getElementById("modal-garments-verification-table").innerHTML = tableHtml;
-        updateGroupedItemsSummary();
+        // Generar la tabla dinámicamente
+        renderGarmentsVerificationTable();
 
         // Resetear fotos y firma
         capturedPhotosList = [];
@@ -2051,6 +2168,19 @@ function openChatTranscriptionModal(id) {
         itemsListHtml = `• ${d.expected_items} prendas esperadas (Plan no especificado)`;
     }
 
+    // Verificar prendas extras guardadas en items_comments
+    if (d.items_comments) {
+        try {
+            const parsed = typeof d.items_comments === 'string' ? JSON.parse(d.items_comments) : d.items_comments;
+            if (parsed && parsed.__extra_garments__) {
+                const extras = parsed.__extra_garments__;
+                extras.forEach(extra => {
+                    itemsListHtml += `<br/><span style="color: #a78bfa; font-weight: bold;">• [Extra] ${extra.quantity}x ${escapeHtml(extra.type)} (${escapeHtml(extra.comment || '')})</span>`;
+                });
+            }
+        } catch (e) {}
+    }
+
     // 4. Pago consolidado
     const payDetails = d.payment_details ? d.payment_details : "Sin detalles de pago específicos (Pago en punto o contraentrega).";
 
@@ -2210,6 +2340,11 @@ async function confirmDelivery() {
                     if (currentCollectedItemsCommentsMap[key]) {
                         orderComments["prendas_generales"] = currentCollectedItemsCommentsMap[key];
                     }
+                }
+                
+                if (d.id === mainId && currentExtraGarmentsList.length > 0) {
+                    d.collected_items += currentExtraGarmentsList.reduce((sum, extra) => sum + extra.quantity, 0);
+                    orderComments["__extra_garments__"] = currentExtraGarmentsList;
                 }
                 
                 d.items_comments = JSON.stringify(orderComments);
