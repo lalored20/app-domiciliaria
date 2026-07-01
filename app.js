@@ -326,8 +326,6 @@ async function selectDate(date) {
     currentDate = date;
     addSystemLog(`📅 Fecha seleccionada: ${currentDate}.`);
     
-    await optimizeRouteByProximity(currentLocalidad, true);
-    
     renderCalendarStrip();
     renderLocalidades();
     renderContent();
