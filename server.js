@@ -302,6 +302,7 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
                 latitude REAL,
                 longitude REAL,
                 driver_notes TEXT,
+                items_comments TEXT,
                 delivery_date TEXT,
                 updated_at INTEGER
             )`);
@@ -310,6 +311,9 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
                 // Silenciar error si la columna ya existe
             });
             appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN resolved_localidad TEXT`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN items_comments TEXT`, (err) => {
                 // Silenciar error si la columna ya existe
             });
             
@@ -496,7 +500,8 @@ function getMergedDeliveries() {
                             latitude: meta.latitude || null,
                             longitude: meta.longitude || null,
                             chat_transcription: o.chatTranscription || null,
-                            items: itemsMap[o.id] || []
+                            items: itemsMap[o.id] || [],
+                            items_comments: meta.items_comments || null
                         };
                     });
                     
@@ -832,8 +837,8 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     INSERT INTO delivery_metadata (
                         order_id, time_window, expected_items, collected_items, 
                         evidence_photo, signature_drawn, latitude, longitude, 
-                        delivery_date, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        delivery_date, items_comments, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(order_id) DO UPDATE SET
                         time_window = excluded.time_window,
                         expected_items = excluded.expected_items,
@@ -843,6 +848,7 @@ app.post('/api/deliveries/sync', async (req, res) => {
                         latitude = COALESCE(excluded.latitude, latitude),
                         longitude = COALESCE(excluded.longitude, longitude),
                         delivery_date = excluded.delivery_date,
+                        items_comments = excluded.items_comments,
                         updated_at = excluded.updated_at
                 `, [
                     clientD.id,
@@ -854,6 +860,7 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     (clientD.latitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.latitude) : null,
                     (clientD.longitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.longitude) : null,
                     clientD.order_date || getColombiaDateString(),
+                    clientD.items_comments || null,
                     nowEpoch
                 ], (err) => {
                     if (err) {

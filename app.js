@@ -5,12 +5,12 @@ let db = null;
 try {
     if (typeof Dexie !== 'undefined') {
         db = new Dexie("AppDomiciliariaDB");
-        db.version(4).stores({
-            deliveries: 'id, client_name, client_phone, address, localidad, time_window, amount, pay_method, status, qr_code, expected_items, collected_items, evidence_photo, signature_drawn, order_date, sync_pending',
+        db.version(5).stores({
+            deliveries: 'id, client_name, client_phone, address, localidad, time_window, amount, pay_method, status, qr_code, expected_items, collected_items, evidence_photo, signature_drawn, order_date, sync_pending, items_comments',
             shift: 'id, driver_name, initial_cash, collected_cash, expenses, status, shift_date, sync_pending',
             pending_wa_messages: '++id, phone, message, status, timestamp, attempts'
         });
-        console.log("🔋 Dexie.js (IndexedDB local) activo (v4).");
+        console.log("🔋 Dexie.js (IndexedDB local) activo (v5).");
     }
 } catch (e) {
     console.warn("⚠️ Falló Dexie. Usando LocalStorage fallback.", e);
@@ -58,6 +58,7 @@ let currentLocalidad = "Usaquén";
 let currentTab = "deliveries";
 let currentActiveDeliveryId = null;
 let currentCollectedItemsCount = 1;
+let currentCollectedItemsCommentsMap = {};
 
 function getTodayDateString() {
     const options = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
@@ -1710,6 +1711,43 @@ function updateGroupedItemsSummary() {
     currentCollectedItemsCount = totalCollected;
 }
 
+function updateItemComment(orderId, itemType, commentValue) {
+    const key = `${orderId}_${itemType}`;
+    if (!currentCollectedItemsCommentsMap) {
+        currentCollectedItemsCommentsMap = {};
+    }
+    currentCollectedItemsCommentsMap[key] = commentValue;
+}
+
+function applyQuickComment(orderId, itemType, commentValue) {
+    const key = `${orderId}_${itemType}`;
+    if (!currentCollectedItemsCommentsMap) {
+        currentCollectedItemsCommentsMap = {};
+    }
+    currentCollectedItemsCommentsMap[key] = commentValue;
+    const input = document.getElementById(`comment-${orderId}-${itemType}`);
+    if (input) {
+        input.value = commentValue;
+    }
+}
+
+// Lightbox para agrandar imágenes
+function openLightbox(src) {
+    const lightbox = document.getElementById("image-lightbox");
+    const img = document.getElementById("lightbox-img");
+    if (lightbox && img) {
+        img.src = src;
+        lightbox.style.display = "flex";
+    }
+}
+
+function closeLightbox() {
+    const lightbox = document.getElementById("image-lightbox");
+    if (lightbox) {
+        lightbox.style.display = "none";
+    }
+}
+
 // Abrir modal
 function openConfirmModal(id) {
     currentActiveDeliveryId = id;
@@ -1725,15 +1763,30 @@ function openConfirmModal(id) {
         const totalAmt = groupItems.reduce((sum, item) => sum + (item.amount || 0), 0);
         document.getElementById('modal-amount').textContent = "$" + totalAmt.toLocaleString();
         
-        // Inicializar mapa de conteo y renderizar la tabla manual de prendas
+        // Inicializar mapas de conteo y comentarios
         currentCollectedItemsMap = {};
+        currentCollectedItemsCommentsMap = {};
         
+        groupItems.forEach(item => {
+            let parsedComments = {};
+            if (item.items_comments) {
+                try {
+                    parsedComments = typeof item.items_comments === 'string' ? JSON.parse(item.items_comments) : item.items_comments;
+                } catch (e) {
+                    parsedComments = {};
+                }
+            }
+            Object.keys(parsedComments).forEach(type => {
+                currentCollectedItemsCommentsMap[`${item.id}_${type}`] = parsedComments[type];
+            });
+        });
+
         let tableHtml = `
             <table style="width:100%; border-collapse:collapse; font-size:12px; color:var(--text-main); text-align:left; margin-top:8px;">
                 <thead>
                     <tr style="border-bottom: 1px solid var(--border); font-weight:700; color:var(--text-muted); font-size:11px;">
-                        <th style="padding:6px 4px;">Pedido</th>
-                        <th style="padding:6px 4px;">Prenda / Especificaciones</th>
+                        <th style="padding:6px 4px; width:55px;">Pedido</th>
+                        <th style="padding:6px 4px;">Detalles de la Prenda & Novedades</th>
                         <th style="padding:6px 4px; text-align:center; width:90px;">Conteo</th>
                     </tr>
                 </thead>
@@ -1745,14 +1798,26 @@ function openConfirmModal(id) {
                 item.items.forEach(sub => {
                     const key = `${item.id}_${sub.type}`;
                     currentCollectedItemsMap[key] = sub.quantity; // Por defecto el esperado
+                    const comment = currentCollectedItemsCommentsMap[key] || "";
                     tableHtml += `
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                            <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:middle;">#${item.ticket_number || 'N/A'}</td>
-                            <td style="padding:8px 4px; vertical-align:middle;">
-                                <div style="font-weight:600;">${escapeHtml(sub.type)}</div>
-                                <div style="font-size:10px; color:var(--text-muted); font-style:italic;">Esperadas: ${sub.quantity} ud.</div>
+                            <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:top; padding-top:12px;">#${item.ticket_number || 'N/A'}</td>
+                            <td style="padding:8px 4px; vertical-align:top;">
+                                <div style="font-weight:600; font-size:12px;">${escapeHtml(sub.type)}</div>
+                                <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Esperadas: ${sub.quantity} ud.</div>
+                                
+                                <!-- Comentarios rápidos -->
+                                <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+                                    <input type="text" id="comment-${item.id}-${escapeHtml(sub.type)}" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', '${escapeHtml(sub.type)}', this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
+                                    <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
+                                        <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
+                                        <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
+                                        <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
+                                        <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
+                                    </div>
+                                </div>
                             </td>
-                            <td style="padding:8px 4px; text-align:center; vertical-align:middle;">
+                            <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
                                 <div style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-input); padding:2px 6px; border-radius:8px; border:1px solid var(--border);">
                                     <button class="btn" onclick="adjustGroupedItemCount('${item.id}', '${escapeHtml(sub.type)}', -1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">-</button>
                                     <span id="count-${item.id}-${escapeHtml(sub.type)}" style="font-weight:700; font-size:12px; min-width:18px; text-align:center; color:var(--text-main);">${sub.quantity}</span>
@@ -1766,14 +1831,26 @@ function openConfirmModal(id) {
                 const key = `${item.id}_prendas_generales`;
                 const expected = item.expected_items || 1;
                 currentCollectedItemsMap[key] = expected;
+                const comment = currentCollectedItemsCommentsMap[key] || "";
                 tableHtml += `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                        <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:middle;">#${item.ticket_number || 'N/A'}</td>
-                        <td style="padding:8px 4px; vertical-align:middle;">
-                            <div style="font-weight:600;">Prendas Generales</div>
-                            <div style="font-size:10px; color:var(--text-muted); font-style:italic;">Esperadas: ${expected} ud.</div>
+                        <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:top; padding-top:12px;">#${item.ticket_number || 'N/A'}</td>
+                        <td style="padding:8px 4px; vertical-align:top;">
+                            <div style="font-weight:600; font-size:12px;">Prendas Generales</div>
+                            <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Esperadas: ${expected} ud.</div>
+                            
+                            <!-- Comentarios rápidos -->
+                            <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+                                <input type="text" id="comment-${item.id}-prendas_generales" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', 'prendas_generales', this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
+                                <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
+                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
+                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
+                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
+                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
+                                </div>
+                            </div>
                         </td>
-                        <td style="padding:8px 4px; text-align:center; vertical-align:middle;">
+                        <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
                             <div style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-input); padding:2px 6px; border-radius:8px; border:1px solid var(--border);">
                                 <button class="btn" onclick="adjustGroupedItemCount('${item.id}', 'prendas_generales', -1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">-</button>
                                 <span id="count-${item.id}-prendas_generales" style="font-weight:700; font-size:12px; min-width:18px; text-align:center; color:var(--text-main);">${expected}</span>
@@ -2067,13 +2144,35 @@ async function confirmDelivery() {
                 d.status = "ENTREGADO";
                 d.evidence_photo = "foto_evidencia.png";
                 d.signature_drawn = true;
+                
+                // Construir el mapa de comentarios específico para esta orden
+                const orderComments = {};
+                if (d.items && d.items.length > 0) {
+                    let orderCollected = 0;
+                    d.items.forEach(sub => {
+                        const key = `${d.id}_${sub.type}`;
+                        const count = currentCollectedItemsMap[key] !== undefined ? currentCollectedItemsMap[key] : sub.quantity;
+                        orderCollected += count;
+                        
+                        if (currentCollectedItemsCommentsMap[key]) {
+                            orderComments[sub.type] = currentCollectedItemsCommentsMap[key];
+                        }
+                    });
+                    d.collected_items = orderCollected;
+                } else {
+                    const key = `${d.id}_prendas_generales`;
+                    d.collected_items = currentCollectedItemsMap[key] !== undefined ? currentCollectedItemsMap[key] : (d.expected_items || 1);
+                    if (currentCollectedItemsCommentsMap[key]) {
+                        orderComments["prendas_generales"] = currentCollectedItemsCommentsMap[key];
+                    }
+                }
+                
+                d.items_comments = JSON.stringify(orderComments);
+                
                 if (d.id === mainId) {
-                    d.collected_items = currentCollectedItemsCount;
                     if (d.expected_items !== d.collected_items) {
                         addSystemLog(`⚠️ ALERTA: Discrepancia física en ${d.client_name} (#${d.ticket_number}). Chatbot: ${d.expected_items} | Domiciliario: ${d.collected_items}.`);
                     }
-                } else {
-                    d.collected_items = d.expected_items || 1;
                 }
                 
                 if (lat !== null && lng !== null) {
@@ -2316,7 +2415,8 @@ async function runBackgroundSync() {
                         collected_items: d.collected_items,
                         signature_drawn: d.signature_drawn,
                         latitude: d.latitude || null,
-                        longitude: d.longitude || null
+                        longitude: d.longitude || null,
+                        items_comments: d.items_comments || null
                     };
                     
                     const { error } = await supabaseClient.from('deliveries').upsert(payload);
@@ -2384,19 +2484,23 @@ async function runBackgroundSync() {
                                     localItem.status = serverD.status;
                                     localChanged = true;
                                 }
-                                // Actualizar siempre teléfono, geolocalización, dirección y localidad resueltas
+                                // Actualizar siempre teléfono, geolocalización, dirección, localidad resueltas, comentarios y conteo recolectado
                                 if (
                                     localItem.client_phone !== serverD.client_phone ||
                                     localItem.latitude !== serverD.latitude ||
                                     localItem.longitude !== serverD.longitude ||
                                     localItem.address !== serverD.address ||
-                                    localItem.localidad !== serverD.localidad
+                                    localItem.localidad !== serverD.localidad ||
+                                    localItem.items_comments !== serverD.items_comments ||
+                                    localItem.collected_items !== serverD.collected_items
                                 ) {
                                     localItem.client_phone = serverD.client_phone;
                                     localItem.latitude = serverD.latitude;
                                     localItem.longitude = serverD.longitude;
                                     localItem.address = serverD.address;
                                     localItem.localidad = serverD.localidad;
+                                    localItem.items_comments = serverD.items_comments;
+                                    localItem.collected_items = serverD.collected_items;
                                     localChanged = true;
                                 }
                                 if (localChanged) {
@@ -2484,7 +2588,8 @@ async function syncDataOffline() {
                     evidence_photo: item.evidence_photo_url,
                     signature_drawn: item.signature_drawn,
                     order_date: item.delivery_date,
-                    sync_pending: false
+                    sync_pending: false,
+                    items_comments: item.items_comments || null
                 };
                 if (db) {
                     await db.deliveries.put(mapped);
