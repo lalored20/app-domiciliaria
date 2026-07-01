@@ -3116,7 +3116,7 @@ async function runBackgroundSync() {
                                 localItem.status = serverD.status;
                                 localChanged = true;
                             }
-                            if (
+                            if (!localItem.sync_pending && (
                                 localItem.client_phone !== serverD.client_phone ||
                                 localItem.latitude !== serverD.latitude ||
                                 localItem.longitude !== serverD.longitude ||
@@ -3127,7 +3127,7 @@ async function runBackgroundSync() {
                                 localItem.facade_photo !== serverD.facade_photo ||
                                 localItem.facade_latitude !== serverD.facade_latitude ||
                                 localItem.facade_longitude !== serverD.facade_longitude
-                            ) {
+                            )) {
                                 localItem.client_phone = serverD.client_phone;
                                 localItem.latitude = serverD.latitude;
                                 localItem.longitude = serverD.longitude;
