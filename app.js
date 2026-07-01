@@ -3139,6 +3139,19 @@ async function runBackgroundSync() {
                 isUsingLocalStorage = true;
             }
             
+            // Re-asociar fotos aisladas a localD para que estén en memoria durante el sync y no se pierdan
+            if (isUsingLocalStorage) {
+                localD.forEach(d => {
+                    if (d) {
+                        const storedFacade = localStorage.getItem("photo_facade_" + d.client_phone);
+                        if (storedFacade) d.facade_photo = storedFacade;
+                        
+                        const storedEvidence = localStorage.getItem("photo_evidence_" + d.id);
+                        if (storedEvidence) d.evidence_photo = storedEvidence;
+                    }
+                });
+            }
+            
             const pendingD = localD.filter(d => d.sync_pending === true || d.sync_pending === 1);
             
             // Enviar solo cambios locales pendientes al servidor local
