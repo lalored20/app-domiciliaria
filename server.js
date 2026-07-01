@@ -911,7 +911,7 @@ app.post('/api/deliveries/sync', async (req, res) => {
                                 longitude = COALESCE(excluded.longitude, longitude),
                                 updated_at = excluded.updated_at
                         `, [
-                            clientD.client_phone,
+                            clientD.client_phone ? clientD.client_phone.replace(/\D/g, '') : '',
                             clientD.client_name,
                             clientD.address,
                             clientD.facade_photo || null,

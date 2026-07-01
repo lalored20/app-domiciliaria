@@ -3180,7 +3180,7 @@ function renderLocalidades() {
     
     // Solo mostrar las localidades que tienen entregas programadas para la fecha seleccionada
     const deliveriesToday = deliveries.filter(d => d.order_date === currentDate);
-    let localidades = [...new Set(deliveriesToday.map(d => d.localidad))];
+    let localidades = [...new Set(deliveriesToday.map(d => d.localidad).filter(l => typeof l === 'string' && l.trim() !== ''))];
     
     if (localidades.length === 0) {
         localidades.push("Usaquén");
