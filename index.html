@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.11">
+    <link rel="stylesheet" href="styles.css?v=1.0.12">
 </head>
 <body class="theme-dark">
 
@@ -98,17 +98,11 @@
 
                 <!-- Foto de Evidencia -->
                 <div class="input-group">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
-                        <label style="margin: 0;">Evidencia de Entrega (Foto)</label>
-                        <span id="photo-delete-btn" style="font-size:11px; color:#ef4444; cursor:pointer; font-weight:bold; display:none;" onclick="clearDeliveryPhoto()">[Eliminar]</span>
-                    </div>
-                    <div class="photo-placeholder" id="photo-upload-placeholder" onclick="triggerCameraInput()">
-                        <span style="font-size:20px;">📷</span>
-                        <span id="photo-status" style="font-weight:600;">Tomar foto obligatoria</span>
+                    <label style="margin-bottom: 6px; display: block;">Evidencia de Entrega (Fotos)</label>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px;" id="photos-gallery-container">
+                        <!-- Se inyecta dinámicamente desde JS -->
                     </div>
                     <input type="file" accept="image/*" capture="environment" id="camera-input" style="display: none;" onchange="handleCameraFile(event)">
-                    <!-- Imagen de previsualización -->
-                    <img id="photo-preview-box" class="photo-preview-img" alt="Entrega simulada" onclick="openLightbox(this.src)" style="cursor: zoom-in;">
                 </div>
 
                 <!-- Control Manual de Prendas -->
@@ -177,7 +171,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.11"></script>
+    <script src="app.js?v=1.0.12"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {

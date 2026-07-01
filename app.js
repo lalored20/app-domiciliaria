@@ -1562,10 +1562,14 @@ function clearSignatureCanvas() {
     }
 }
 
+// Variable global para almacenar las imágenes de evidencia capturadas
+let capturedPhotosList = [];
+
 // Soporte de Cámara y Subida de Archivo Real
 function triggerCameraInput() {
     const input = document.getElementById("camera-input");
     if (input) {
+        input.value = "";
         input.click();
     } else {
         takeDeliveryPhotoSim();
@@ -1578,19 +1582,10 @@ function handleCameraFile(event) {
 
     const reader = new FileReader();
     reader.onload = function(e) {
-        const placeholder = document.getElementById("photo-upload-placeholder");
-        const preview = document.getElementById("photo-preview-box");
-        const deleteBtn = document.getElementById("photo-delete-btn");
-        
-        if (placeholder && preview) {
-            placeholder.style.display = "none";
-            preview.src = e.target.result;
-            preview.style.display = "block";
-            isPhotoCaptured = true;
-            if (deleteBtn) deleteBtn.style.display = "block";
-            
-            addSystemLog("📷 Foto de evidencia capturada con éxito.");
-            updateCompleteButtonState();
+        if (capturedPhotosList.length < 4) {
+            capturedPhotosList.push(e.target.result);
+            addSystemLog(`📷 Foto de evidencia ${capturedPhotosList.length} añadida.`);
+            renderPhotosGallery();
         }
     };
     reader.readAsDataURL(file);
@@ -1598,44 +1593,57 @@ function handleCameraFile(event) {
 
 // Simulador de Cámara (Failsafe)
 function takeDeliveryPhotoSim() {
-    const placeholder = document.getElementById("photo-upload-placeholder");
-    const preview = document.getElementById("photo-preview-box");
-    const deleteBtn = document.getElementById("photo-delete-btn");
-    if (!placeholder || !preview) return;
-
-    const mockPhoto = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='200' viewBox='0 0 400 200'><rect width='400' height='200' fill='%231C2331'/><rect x='130' y='40' width='140' height='120' fill='%238B5CF6' rx='10'/><path d='M130 70 L200 110 L270 70' stroke='%237C3AED' stroke-width='4' fill='none'/><circle cx='200' cy='100' r='25' fill='%2306B6D4' opacity='0.8'/><text x='200' y='165' fill='%23F3F4F6' font-size='14' font-weight='bold' font-family='sans-serif' text-anchor='middle'>EVIDENCIA ENTREGADA</text></svg>";
-
-    placeholder.style.display = "none";
-    preview.src = mockPhoto;
-    preview.style.display = "block";
-    isPhotoCaptured = true;
-    if (deleteBtn) deleteBtn.style.display = "block";
+    if (capturedPhotosList.length >= 4) {
+        alert("⚠️ Has alcanzado el límite máximo de 4 fotos.");
+        return;
+    }
     
-    addSystemLog("📷 Captura de foto de evidencia completada.");
-    updateCompleteButtonState();
+    const colors = ["%238B5CF6", "%2306B6D4", "%2310B981", "%23F59E0B"];
+    const activeColor = colors[capturedPhotosList.length] || "%238B5CF6";
+    const mockPhoto = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='200' viewBox='0 0 400 200'><rect width='400' height='200' fill='%231C2331'/><rect x='130' y='40' width='140' height='120' fill='${activeColor}' rx='10'/><path d='M130 70 L200 110 L270 70' stroke='%237C3AED' stroke-width='4' fill='none'/><circle cx='200' cy='100' r='25' fill='%23FFFFFF' opacity='0.5'/><text x='200' y='165' fill='%23F3F4F6' font-size='14' font-weight='bold' font-family='sans-serif' text-anchor='middle'>EVIDENCIA %23${capturedPhotosList.length + 1}</text></svg>`;
+
+    capturedPhotosList.push(mockPhoto);
+    addSystemLog(`📷 Foto de evidencia simulada #${capturedPhotosList.length} completada.`);
+    renderPhotosGallery();
 }
 
-// Eliminar foto de evidencia capturada
-function clearDeliveryPhoto() {
-    const placeholder = document.getElementById("photo-upload-placeholder");
-    const preview = document.getElementById("photo-preview-box");
-    const deleteBtn = document.getElementById("photo-delete-btn");
-    const cameraInput = document.getElementById("camera-input");
-    
-    if (placeholder && preview && deleteBtn) {
-        placeholder.style.display = "flex";
-        preview.style.display = "none";
-        preview.src = "";
-        deleteBtn.style.display = "none";
-        isPhotoCaptured = false;
-        
-        if (cameraInput) {
-            cameraInput.value = "";
-        }
-        
-        addSystemLog("📷 Evidencia de foto eliminada. Estado reiniciado.");
-        updateCompleteButtonState();
+function removeGalleryPhoto(index) {
+    if (index >= 0 && index < capturedPhotosList.length) {
+        capturedPhotosList.splice(index, 1);
+        addSystemLog(`📷 Foto de evidencia eliminada. Quedan ${capturedPhotosList.length} fotos.`);
+        renderPhotosGallery();
     }
+}
+
+function renderPhotosGallery() {
+    const container = document.getElementById("photos-gallery-container");
+    if (!container) return;
+    
+    let html = "";
+    capturedPhotosList.forEach((src, index) => {
+        html += `
+            <div style="position: relative; width: 68px; height: 68px; transition: all 0.2s ease;">
+                <img src="${src}" onclick="openLightbox('${src}')" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px; cursor: zoom-in; border: 1px solid var(--border); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                <div onclick="removeGalleryPhoto(${index})" style="position: absolute; top: -6px; right: -6px; background: #ef4444; color: white; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; cursor: pointer; border: 1.5px solid var(--bg-card); z-index: 10; box-shadow: 0 2px 4px rgba(0,0,0,0.3); line-height: 1;">×</div>
+            </div>
+        `;
+    });
+    
+    // Botón de Añadir Foto
+    if (capturedPhotosList.length < 4) {
+        html += `
+            <div onclick="triggerCameraInput()" style="width: 68px; height: 68px; border-radius: 8px; border: 1px dashed var(--border); display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(255,255,255,0.02); cursor: pointer; color: var(--text-muted); transition: all 0.2s;" onmouseover="this.style.borderColor='var(--primary)'; this.style.background='rgba(255,255,255,0.05)';" onmouseout="this.style.borderColor='var(--border)'; this.style.background='rgba(255,255,255,0.02)';">
+                <span style="font-size: 22px; color: var(--primary); font-weight: bold; line-height: 1; margin-bottom: 2px;">+</span>
+                <span style="font-size: 9px; font-weight: 700; color: var(--text-muted);">Añadir</span>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+    
+    // Actualizar validación
+    isPhotoCaptured = capturedPhotosList.length > 0;
+    updateCompleteButtonState();
 }
 
 // Controlar habilitación del botón Completar
@@ -1869,22 +1877,26 @@ function openConfirmModal(id) {
         document.getElementById("modal-garments-verification-table").innerHTML = tableHtml;
         updateGroupedItemsSummary();
 
-        // Resetear foto y firma
-        isPhotoCaptured = false;
+        // Resetear fotos y firma
+        capturedPhotosList = [];
+        if (d.evidence_photo) {
+            try {
+                const parsed = JSON.parse(d.evidence_photo);
+                if (Array.isArray(parsed)) {
+                    capturedPhotosList = parsed.filter(Boolean);
+                } else if (d.evidence_photo !== "foto_evidencia.png" && d.evidence_photo.trim() !== "") {
+                    capturedPhotosList = [d.evidence_photo];
+                }
+            } catch (e) {
+                if (d.evidence_photo !== "foto_evidencia.png" && d.evidence_photo.trim() !== "") {
+                    capturedPhotosList = [d.evidence_photo];
+                }
+            }
+        }
+        
+        renderPhotosGallery();
         hasSigned = false;
         updateCompleteButtonState();
-        
-        const deleteBtn = document.getElementById("photo-delete-btn");
-        if (deleteBtn) deleteBtn.style.display = "none";
-
-        const placeholder = document.getElementById("photo-upload-placeholder");
-        if (placeholder) placeholder.style.display = "flex";
-        
-        const preview = document.getElementById("photo-preview-box");
-        if (preview) {
-            preview.style.display = "none";
-            preview.src = "";
-        }
 
         document.getElementById('confirm-modal').style.display = 'flex';
         
@@ -2045,6 +2057,37 @@ function openChatTranscriptionModal(id) {
     // 5. Indicaciones del chat
     const chatNotes = extractDeliveryNotes(d.chat_transcription);
 
+    // 5.1 Evidencias fotográficas si está entregado
+    let evidencePhotosHtml = "";
+    if (d.status === "ENTREGADO" && d.evidence_photo) {
+        let photosList = [];
+        try {
+            const parsed = JSON.parse(d.evidence_photo);
+            if (Array.isArray(parsed)) {
+                photosList = parsed.filter(Boolean);
+            } else if (d.evidence_photo !== "foto_evidencia.png" && d.evidence_photo.trim() !== "") {
+                photosList = [d.evidence_photo];
+            }
+        } catch (e) {
+            if (d.evidence_photo !== "foto_evidencia.png" && d.evidence_photo.trim() !== "") {
+                photosList = [d.evidence_photo];
+            }
+        }
+        
+        if (photosList.length > 0) {
+            evidencePhotosHtml = `
+                <div style="border-top: 1px dashed var(--border); padding-top: 8px; margin-top: 8px;">
+                    <div style="font-weight: 700; color: var(--primary); font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">📸 EVIDENCIAS DE ENTREGA</div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        ${photosList.map(src => `
+                            <img src="${src}" onclick="openLightbox('${src}')" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: zoom-in; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+    }
+
     // 6. Ocultar campos viejos redundantes del modal
     document.getElementById('chat-modal-address').style.display = 'none';
     document.getElementById('chat-modal-amount').style.display = 'none';
@@ -2099,10 +2142,12 @@ function openChatTranscriptionModal(id) {
             <!-- Sección: Indicaciones de Entrega -->
             <div>
                 <div style="font-weight: 700; color: #a78bfa; font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">ℹ️ INDICACIONES Y PUNTOS DE REFERENCIA</div>
-                <div style="background: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); color: var(--text-muted); font-style: italic;">
+                <div style="background: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05); color: var(--text-muted); font-style: italic; margin-bottom: 8px;">
                     ${chatNotes}
                 </div>
             </div>
+            
+            ${evidencePhotosHtml}
             
         </div>
     `;
@@ -2142,7 +2187,7 @@ async function confirmDelivery() {
         const applyConfirmation = async () => {
             deliveriesToConfirm.forEach(d => {
                 d.status = "ENTREGADO";
-                d.evidence_photo = "foto_evidencia.png";
+                d.evidence_photo = JSON.stringify(capturedPhotosList);
                 d.signature_drawn = true;
                 
                 // Construir el mapa de comentarios específico para esta orden
