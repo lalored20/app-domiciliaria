@@ -643,9 +643,9 @@ function createDeliveryCard(d) {
         `;
     } else {
         facadePillHtml = `
-            <div onclick="captureFacadeAndGPSFromCard(event, '${d.id}')" style="margin-top: 6px; padding: 6px 10px; border: 1px dashed rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.02); border-radius: 8px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(139, 92, 246, 0.08)'; this.style.borderColor='var(--primary)';" onmouseout="this.style.background='rgba(139, 92, 246, 0.02)'; this.style.borderColor='rgba(139, 92, 246, 0.4)';">
+            <div onclick="openFacadeModal(event, '${d.id}')" style="margin-top: 6px; padding: 6px 10px; border: 1px dashed rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.02); border-radius: 8px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(139, 92, 246, 0.08)'; this.style.borderColor='var(--primary)';" onmouseout="this.style.background='rgba(139, 92, 246, 0.02)'; this.style.borderColor='rgba(139, 92, 246, 0.4)';">
                 <span style="color: var(--primary); font-weight: 700; display: flex; align-items: center; gap: 4px;">📷 Registrar Fachada & GPS</span>
-                <span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">Tomar ➔</span>
+                <span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">Registrar ➔</span>
             </div>
         `;
     }
