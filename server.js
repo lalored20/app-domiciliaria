@@ -652,6 +652,14 @@ function getMergedDeliveries() {
                             d.facade_photo = facade.facade_photo || null;
                             d.facade_latitude = facade.latitude || null;
                             d.facade_longitude = facade.longitude || null;
+                            
+                            // Si los datos actuales de la orden están "Por confirmar", y tenemos historial en client_facade, los restauramos
+                            if (facade.client_name && (!d.client_name || d.client_name.toLowerCase().includes("confirmar") || d.client_name.trim() === "")) {
+                                d.client_name = facade.client_name;
+                            }
+                            if (facade.address && (!d.address || d.address.toLowerCase().includes("confirmar") || d.address.trim() === "")) {
+                                d.address = facade.address;
+                            }
                         });
                         
                         resolve(allDeliveries);
@@ -904,31 +912,68 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     
                     // Guardar información de fachada si está presente
                     if (clientD.facade_photo || (clientD.facade_latitude && clientD.facade_longitude)) {
-                        appDb.run(`
-                            INSERT INTO client_facade (
-                                client_phone, client_name, address, facade_photo, latitude, longitude, updated_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(client_phone) DO UPDATE SET
-                                client_name = excluded.client_name,
-                                address = excluded.address,
-                                facade_photo = COALESCE(excluded.facade_photo, facade_photo),
-                                latitude = COALESCE(excluded.latitude, latitude),
-                                longitude = COALESCE(excluded.longitude, longitude),
-                                updated_at = excluded.updated_at
-                        `, [
-                            clientD.client_phone ? clientD.client_phone.replace(/\D/g, '') : '',
-                            clientD.client_name,
-                            clientD.address,
-                            clientD.facade_photo || null,
-                            clientD.facade_latitude ? parseFloat(clientD.facade_latitude) : null,
-                            clientD.facade_longitude ? parseFloat(clientD.facade_longitude) : null,
-                            nowEpoch
-                        ], (err) => {
-                            if (err) {
-                                console.error(`❌ Error guardando fachada en client_facade para ${clientD.client_phone}:`, err.message);
-                            }
-                            resolve();
-                        });
+                        const clientPhoneClean = clientD.client_phone ? clientD.client_phone.replace(/\D/g, '') : '';
+                        let finalAddress = clientD.address;
+                        let resolvedLoc = null;
+                        
+                        // Función auxiliar interna para insertar/actualizar fachada en SQLite
+                        const saveFacadeToDb = (addrVal, locVal) => {
+                            appDb.run(`
+                                INSERT INTO client_facade (
+                                    client_phone, client_name, address, facade_photo, latitude, longitude, updated_at
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                                ON CONFLICT(client_phone) DO UPDATE SET
+                                    client_name = excluded.client_name,
+                                    address = excluded.address,
+                                    facade_photo = COALESCE(excluded.facade_photo, facade_photo),
+                                    latitude = COALESCE(excluded.latitude, latitude),
+                                    longitude = COALESCE(excluded.longitude, longitude),
+                                    updated_at = excluded.updated_at
+                            `, [
+                                clientPhoneClean,
+                                clientD.client_name,
+                                addrVal || clientD.address,
+                                clientD.facade_photo || null,
+                                clientD.facade_latitude ? parseFloat(clientD.facade_latitude) : null,
+                                clientD.facade_longitude ? parseFloat(clientD.facade_longitude) : null,
+                                nowEpoch
+                            ], (err) => {
+                                if (err) {
+                                    console.error(`❌ Error guardando fachada en client_facade para ${clientD.client_phone}:`, err.message);
+                                }
+                                resolve();
+                            });
+                        };
+
+                        const isAddrUnconfirmed = !finalAddress || finalAddress.toLowerCase().includes("confirmar") || finalAddress.trim() === "";
+                        if (isAddrUnconfirmed && clientD.facade_latitude && clientD.facade_longitude) {
+                            reverseGeocode(parseFloat(clientD.facade_latitude), parseFloat(clientD.facade_longitude)).then(geoRes => {
+                                if (geoRes && geoRes.display_name) {
+                                    finalAddress = geoRes.display_name;
+                                    resolvedLoc = geoRes.localidad;
+                                    console.log(`✅ [Geocoder Satelital] Dirección de fachada resuelta para ${clientPhoneClean}: "${finalAddress}" [${resolvedLoc}]`);
+                                    
+                                    // 1. Actualizar resolved_address y resolved_localidad en delivery_metadata de la orden
+                                    appDb.run(`
+                                        UPDATE delivery_metadata 
+                                        SET resolved_address = ?, resolved_localidad = ? 
+                                        WHERE order_id = ?
+                                    `, [finalAddress, resolvedLoc, clientD.id], (err) => {
+                                        if (err) {
+                                            console.error("❌ Error actualizando resolved_address en delivery_metadata:", err.message);
+                                        }
+                                        // 2. Guardar en client_facade
+                                        saveFacadeToDb(finalAddress, resolvedLoc);
+                                    });
+                                } else {
+                                    saveFacadeToDb(null, null);
+                                }
+                            }).catch(() => {
+                                saveFacadeToDb(null, null);
+                            });
+                        } else {
+                            saveFacadeToDb(null, null);
+                        }
                     } else {
                         resolve();
                     }
