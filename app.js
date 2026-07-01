@@ -1579,15 +1579,100 @@ function startQRScan() {
         btn.style.borderColor = "var(--success)";
         isQRScanActive = true;
         
-        const d = deliveries.find(d => d.id === currentActiveDeliveryId);
+        // Soportar grupo de IDs separados por coma
+        const ids = currentActiveDeliveryId.split(',');
+        const mainId = ids[0];
+        const d = deliveries.find(item => item.id === mainId);
         const code = d ? d.qr_code : "Desconocido";
         addSystemLog(`✅ Código QR de Prenda validado exitosamente: ${code}`);
         
-        updateCompleteButtonState(); // Actualizar botón
+        const box = document.getElementById("qr-manual-input-box");
+        if (box) box.style.display = "none";
+        const toggle = document.getElementById("qr-manual-toggle");
+        if (toggle) toggle.style.display = "none";
+        
+        updateCompleteButtonState();
     }, 2000);
 }
 
-// Simulador de Cámara
+// Soporte de Cámara y Subida de Archivo Real
+function triggerCameraInput() {
+    const input = document.getElementById("camera-input");
+    if (input) {
+        input.click();
+    } else {
+        takeDeliveryPhotoSim();
+    }
+}
+
+function handleCameraFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const placeholder = document.getElementById("photo-upload-placeholder");
+        const preview = document.getElementById("photo-preview-box");
+        if (placeholder && preview) {
+            placeholder.style.display = "none";
+            preview.src = e.target.result;
+            preview.style.display = "block";
+            isPhotoCaptured = true;
+            addSystemLog("📷 Foto de evidencia capturada con éxito.");
+            updateCompleteButtonState();
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+function toggleManualQRInput() {
+    const box = document.getElementById("qr-manual-input-box");
+    const toggle = document.getElementById("qr-manual-toggle");
+    if (box) {
+        if (box.style.display === "none" || box.style.display === "") {
+            box.style.display = "block";
+            toggle.textContent = "Cancelar ingreso manual";
+        } else {
+            box.style.display = "none";
+            toggle.textContent = "Ingresar manualmente";
+        }
+    }
+}
+
+function validateManualQR() {
+    const valInput = document.getElementById("qr-manual-value");
+    if (!valInput) return;
+    const value = valInput.value.trim();
+    if (!value) {
+        alert("⚠️ Ingrese un código para validar.");
+        return;
+    }
+    
+    const ids = currentActiveDeliveryId.split(',');
+    const groupItems = deliveries.filter(d => ids.includes(d.id));
+    const matched = groupItems.find(item => item.qr_code === value || item.qr_code.endsWith(value));
+    
+    if (matched) {
+        isQRScanActive = true;
+        const btn = document.getElementById("qr-scan-btn");
+        if (btn) {
+            btn.innerHTML = `✅ QR Validado (#${matched.ticket_number || 'N/A'})`;
+            btn.style.color = "var(--success)";
+            btn.style.borderColor = "var(--success)";
+        }
+        const box = document.getElementById("qr-manual-input-box");
+        if (box) box.style.display = "none";
+        const toggle = document.getElementById("qr-manual-toggle");
+        if (toggle) toggle.style.display = "none";
+        
+        addSystemLog(`✅ QR Validado manualmente: ${value}`);
+        updateCompleteButtonState();
+    } else {
+        alert("❌ El código ingresado no coincide con ninguna prenda de esta entrega.");
+    }
+}
+
+// Simulador de Cámara (Failsafe)
 function takeDeliveryPhotoSim() {
     const placeholder = document.getElementById("photo-upload-placeholder");
     const preview = document.getElementById("photo-preview-box");
@@ -1601,7 +1686,7 @@ function takeDeliveryPhotoSim() {
     isPhotoCaptured = true;
     addSystemLog("📷 Captura de foto de evidencia completada.");
     
-    updateCompleteButtonState(); // Actualizar botón
+    updateCompleteButtonState();
 }
 
 // Controlar habilitación del botón Completar
@@ -1626,8 +1711,11 @@ function updateCompleteButtonState() {
 function adjustItemCount(direction) {
     const display = document.getElementById("modal-items-count-display");
     const expectedInfo = document.getElementById("modal-expected-items-info");
-    const d = deliveries.find(d => d.id === currentActiveDeliveryId);
-    if (!d || !display) return;
+    if (!display || !expectedInfo) return;
+
+    const ids = currentActiveDeliveryId.split(',');
+    const groupItems = deliveries.filter(item => ids.includes(item.id));
+    const totalExpected = groupItems.reduce((sum, item) => sum + (item.expected_items || 1), 0);
 
     currentCollectedItemsCount += direction;
     if (currentCollectedItemsCount < 1) {
@@ -1636,16 +1724,16 @@ function adjustItemCount(direction) {
 
     display.textContent = currentCollectedItemsCount;
 
-    if (currentCollectedItemsCount !== d.expected_items) {
+    if (currentCollectedItemsCount !== totalExpected) {
         display.style.color = "var(--warning)";
         display.style.textShadow = "0 0 10px rgba(245, 158, 11, 0.3)";
         expectedInfo.style.color = "var(--warning)";
-        expectedInfo.textContent = `⚠️ Discrepancia: Bot dice ${d.expected_items} | Domiciliario contó ${currentCollectedItemsCount}`;
+        expectedInfo.textContent = `⚠️ Discrepancia: Bot dice ${totalExpected} | Domiciliario contó ${currentCollectedItemsCount}`;
     } else {
         display.style.color = "";
         display.style.textShadow = "";
         expectedInfo.style.color = "";
-        expectedInfo.textContent = `Esperadas según chatbot: ${d.expected_items} prendas`;
+        expectedInfo.textContent = `Esperadas según chatbot: ${totalExpected} prendas`;
     }
 }
 

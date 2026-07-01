@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.8">
+    <link rel="stylesheet" href="styles.css?v=1.0.9">
 </head>
 <body class="theme-dark">
 
@@ -107,15 +107,26 @@
                         <div class="qr-scanner-laser"></div>
                         <div class="qr-scanner-rect"></div>
                     </div>
+                    <!-- Entrada QR manual -->
+                    <div id="qr-manual-input-box" style="margin-top: 8px; display: none;">
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="qr-manual-value" placeholder="Ingrese código de barra/QR" style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); font-size: 12px; outline: none; border-color: rgba(255,255,255,0.1);">
+                            <button class="btn btn-action" onclick="validateManualQR()" style="padding: 0 12px; font-size: 11px; height: 32px; border-radius: 8px;">Validar</button>
+                        </div>
+                    </div>
+                    <div style="text-align: right; margin-top: 4px;">
+                        <span id="qr-manual-toggle" style="font-size: 11px; color: var(--primary); cursor: pointer; font-weight: 500;" onclick="toggleManualQRInput()">Ingresar manualmente</span>
+                    </div>
                 </div>
 
                 <!-- Foto de Evidencia -->
                 <div class="input-group">
                     <label>Evidencia de Entrega (Foto)</label>
-                    <div class="photo-placeholder" id="photo-upload-placeholder" onclick="takeDeliveryPhotoSim()">
+                    <div class="photo-placeholder" id="photo-upload-placeholder" onclick="triggerCameraInput()">
                         <span style="font-size:20px;">📷</span>
                         <span id="photo-status" style="font-weight:600;">Tomar foto obligatoria</span>
                     </div>
+                    <input type="file" accept="image/*" capture="environment" id="camera-input" style="display: none;" onchange="handleCameraFile(event)">
                     <!-- Imagen de previsualización -->
                     <img id="photo-preview-box" class="photo-preview-img" alt="Entrega simulada">
                 </div>
@@ -191,7 +202,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.8"></script>
+    <script src="app.js?v=1.0.9"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {
