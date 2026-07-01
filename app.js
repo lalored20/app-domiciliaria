@@ -1,4 +1,4 @@
-/* SYSTEMA ANTIGRAVITY v4.5: MOTOR DE LÓGICA DE NEGOCIO (FULL MIGRADO, AUTOCORREGIDO E INTERACTIVO) */
+/* SYSTEMA ANTIGRAVITY v4.5: MOTOR DE LÓGICA DE NEGOCIO (Corrección de navegador y app domiciliaria) */
 
 // 1. IndexedDB/Dexie DESACTIVADO - La app funciona 100% con LocalStorage + Express Server
 // Razón: IndexedDB se congela indefinidamente en Chrome normal (no incógnito) para localhost,
