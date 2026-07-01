@@ -1561,40 +1561,6 @@ function clearSignatureCanvas() {
     }
 }
 
-// Simulador de Scanner QR
-function startQRScan() {
-    const btn = document.getElementById("qr-scan-btn");
-    const screen = document.getElementById("qr-scanner-screen");
-    if (!btn || !screen) return;
-
-    btn.style.display = "none";
-    screen.style.display = "block";
-    addSystemLog("📷 Activando cámara. Buscando código QR...");
-
-    setTimeout(() => {
-        screen.style.display = "none";
-        btn.style.display = "block";
-        btn.innerHTML = "✅ QR Prenda Validado";
-        btn.style.color = "var(--success)";
-        btn.style.borderColor = "var(--success)";
-        isQRScanActive = true;
-        
-        // Soportar grupo de IDs separados por coma
-        const ids = currentActiveDeliveryId.split(',');
-        const mainId = ids[0];
-        const d = deliveries.find(item => item.id === mainId);
-        const code = d ? d.qr_code : "Desconocido";
-        addSystemLog(`✅ Código QR de Prenda validado exitosamente: ${code}`);
-        
-        const box = document.getElementById("qr-manual-input-box");
-        if (box) box.style.display = "none";
-        const toggle = document.getElementById("qr-manual-toggle");
-        if (toggle) toggle.style.display = "none";
-        
-        updateCompleteButtonState();
-    }, 2000);
-}
-
 // Soporte de Cámara y Subida de Archivo Real
 function triggerCameraInput() {
     const input = document.getElementById("camera-input");
@@ -1613,11 +1579,15 @@ function handleCameraFile(event) {
     reader.onload = function(e) {
         const placeholder = document.getElementById("photo-upload-placeholder");
         const preview = document.getElementById("photo-preview-box");
+        const deleteBtn = document.getElementById("photo-delete-btn");
+        
         if (placeholder && preview) {
             placeholder.style.display = "none";
             preview.src = e.target.result;
             preview.style.display = "block";
             isPhotoCaptured = true;
+            if (deleteBtn) deleteBtn.style.display = "block";
+            
             addSystemLog("📷 Foto de evidencia capturada con éxito.");
             updateCompleteButtonState();
         }
@@ -1625,57 +1595,11 @@ function handleCameraFile(event) {
     reader.readAsDataURL(file);
 }
 
-function toggleManualQRInput() {
-    const box = document.getElementById("qr-manual-input-box");
-    const toggle = document.getElementById("qr-manual-toggle");
-    if (box) {
-        if (box.style.display === "none" || box.style.display === "") {
-            box.style.display = "block";
-            toggle.textContent = "Cancelar ingreso manual";
-        } else {
-            box.style.display = "none";
-            toggle.textContent = "Ingresar manualmente";
-        }
-    }
-}
-
-function validateManualQR() {
-    const valInput = document.getElementById("qr-manual-value");
-    if (!valInput) return;
-    const value = valInput.value.trim();
-    if (!value) {
-        alert("⚠️ Ingrese un código para validar.");
-        return;
-    }
-    
-    const ids = currentActiveDeliveryId.split(',');
-    const groupItems = deliveries.filter(d => ids.includes(d.id));
-    const matched = groupItems.find(item => item.qr_code === value || item.qr_code.endsWith(value));
-    
-    if (matched) {
-        isQRScanActive = true;
-        const btn = document.getElementById("qr-scan-btn");
-        if (btn) {
-            btn.innerHTML = `✅ QR Validado (#${matched.ticket_number || 'N/A'})`;
-            btn.style.color = "var(--success)";
-            btn.style.borderColor = "var(--success)";
-        }
-        const box = document.getElementById("qr-manual-input-box");
-        if (box) box.style.display = "none";
-        const toggle = document.getElementById("qr-manual-toggle");
-        if (toggle) toggle.style.display = "none";
-        
-        addSystemLog(`✅ QR Validado manualmente: ${value}`);
-        updateCompleteButtonState();
-    } else {
-        alert("❌ El código ingresado no coincide con ninguna prenda de esta entrega.");
-    }
-}
-
 // Simulador de Cámara (Failsafe)
 function takeDeliveryPhotoSim() {
     const placeholder = document.getElementById("photo-upload-placeholder");
     const preview = document.getElementById("photo-preview-box");
+    const deleteBtn = document.getElementById("photo-delete-btn");
     if (!placeholder || !preview) return;
 
     const mockPhoto = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='200' viewBox='0 0 400 200'><rect width='400' height='200' fill='%231C2331'/><rect x='130' y='40' width='140' height='120' fill='%238B5CF6' rx='10'/><path d='M130 70 L200 110 L270 70' stroke='%237C3AED' stroke-width='4' fill='none'/><circle cx='200' cy='100' r='25' fill='%2306B6D4' opacity='0.8'/><text x='200' y='165' fill='%23F3F4F6' font-size='14' font-weight='bold' font-family='sans-serif' text-anchor='middle'>EVIDENCIA ENTREGADA</text></svg>";
@@ -1684,9 +1608,33 @@ function takeDeliveryPhotoSim() {
     preview.src = mockPhoto;
     preview.style.display = "block";
     isPhotoCaptured = true;
-    addSystemLog("📷 Captura de foto de evidencia completada.");
+    if (deleteBtn) deleteBtn.style.display = "block";
     
+    addSystemLog("📷 Captura de foto de evidencia completada.");
     updateCompleteButtonState();
+}
+
+// Eliminar foto de evidencia capturada
+function clearDeliveryPhoto() {
+    const placeholder = document.getElementById("photo-upload-placeholder");
+    const preview = document.getElementById("photo-preview-box");
+    const deleteBtn = document.getElementById("photo-delete-btn");
+    const cameraInput = document.getElementById("camera-input");
+    
+    if (placeholder && preview && deleteBtn) {
+        placeholder.style.display = "flex";
+        preview.style.display = "none";
+        preview.src = "";
+        deleteBtn.style.display = "none";
+        isPhotoCaptured = false;
+        
+        if (cameraInput) {
+            cameraInput.value = "";
+        }
+        
+        addSystemLog("📷 Evidencia de foto eliminada. Estado reiniciado.");
+        updateCompleteButtonState();
+    }
 }
 
 // Controlar habilitación del botón Completar
@@ -1694,7 +1642,7 @@ function updateCompleteButtonState() {
     const btn = document.getElementById("btn-complete-delivery");
     if (!btn) return;
 
-    if (isQRScanActive && isPhotoCaptured && hasSigned) {
+    if (isPhotoCaptured && hasSigned) {
         btn.style.opacity = "1";
         btn.style.pointerEvents = "auto";
         btn.style.background = "var(--success)";
@@ -1707,34 +1655,59 @@ function updateCompleteButtonState() {
     }
 }
 
-// Funciones de Conteo de Prendas
-function adjustItemCount(direction) {
-    const display = document.getElementById("modal-items-count-display");
-    const expectedInfo = document.getElementById("modal-expected-items-info");
-    if (!display || !expectedInfo) return;
+// Variable global para almacenar el conteo manual por prenda
+let currentCollectedItemsMap = {};
 
+function adjustGroupedItemCount(orderId, itemType, direction) {
+    const key = `${orderId}_${itemType}`;
+    if (currentCollectedItemsMap[key] === undefined) return;
+    
+    currentCollectedItemsMap[key] += direction;
+    if (currentCollectedItemsMap[key] < 0) {
+        currentCollectedItemsMap[key] = 0;
+    }
+    
+    const span = document.getElementById(`count-${orderId}-${itemType}`);
+    if (span) {
+        span.textContent = currentCollectedItemsMap[key];
+    }
+    
+    updateGroupedItemsSummary();
+}
+
+function updateGroupedItemsSummary() {
     const ids = currentActiveDeliveryId.split(',');
     const groupItems = deliveries.filter(item => ids.includes(item.id));
-    const totalExpected = groupItems.reduce((sum, item) => sum + (item.expected_items || 1), 0);
-
-    currentCollectedItemsCount += direction;
-    if (currentCollectedItemsCount < 1) {
-        currentCollectedItemsCount = 1;
+    
+    let totalExpected = 0;
+    let totalCollected = 0;
+    
+    groupItems.forEach(item => {
+        if (item.items && item.items.length > 0) {
+            item.items.forEach(sub => {
+                totalExpected += sub.quantity;
+                const key = `${item.id}_${sub.type}`;
+                totalCollected += (currentCollectedItemsMap[key] !== undefined ? currentCollectedItemsMap[key] : sub.quantity);
+            });
+        } else {
+            totalExpected += (item.expected_items || 1);
+            const key = `${item.id}_prendas_generales`;
+            totalCollected += (currentCollectedItemsMap[key] !== undefined ? currentCollectedItemsMap[key] : (item.expected_items || 1));
+        }
+    });
+    
+    const summaryEl = document.getElementById("modal-items-count-summary");
+    if (summaryEl) {
+        if (totalCollected !== totalExpected) {
+            summaryEl.style.color = "var(--warning)";
+            summaryEl.textContent = `⚠️ Discrepancia: Esperadas ${totalExpected} | Contadas ${totalCollected}`;
+        } else {
+            summaryEl.style.color = "var(--success)";
+            summaryEl.textContent = `✅ Total de prendas verificado: ${totalExpected} de ${totalExpected}`;
+        }
     }
-
-    display.textContent = currentCollectedItemsCount;
-
-    if (currentCollectedItemsCount !== totalExpected) {
-        display.style.color = "var(--warning)";
-        display.style.textShadow = "0 0 10px rgba(245, 158, 11, 0.3)";
-        expectedInfo.style.color = "var(--warning)";
-        expectedInfo.textContent = `⚠️ Discrepancia: Bot dice ${totalExpected} | Domiciliario contó ${currentCollectedItemsCount}`;
-    } else {
-        display.style.color = "";
-        display.style.textShadow = "";
-        expectedInfo.style.color = "";
-        expectedInfo.textContent = `Esperadas según chatbot: ${totalExpected} prendas`;
-    }
+    
+    currentCollectedItemsCount = totalCollected;
 }
 
 // Abrir modal
@@ -1752,66 +1725,80 @@ function openConfirmModal(id) {
         const totalAmt = groupItems.reduce((sum, item) => sum + (item.amount || 0), 0);
         document.getElementById('modal-amount').textContent = "$" + totalAmt.toLocaleString();
         
-        // Sumar prendas esperadas
-        const totalExpected = groupItems.reduce((sum, item) => sum + (item.expected_items || 1), 0);
-        currentCollectedItemsCount = totalExpected;
+        // Inicializar mapa de conteo y renderizar la tabla manual de prendas
+        currentCollectedItemsMap = {};
         
-        const display = document.getElementById("modal-items-count-display");
-        const expectedInfo = document.getElementById("modal-expected-items-info");
+        let tableHtml = `
+            <table style="width:100%; border-collapse:collapse; font-size:12px; color:var(--text-main); text-align:left; margin-top:8px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border); font-weight:700; color:var(--text-muted); font-size:11px;">
+                        <th style="padding:6px 4px;">Pedido</th>
+                        <th style="padding:6px 4px;">Prenda / Especificaciones</th>
+                        <th style="padding:6px 4px; text-align:center; width:90px;">Conteo</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
         
-        if (display) {
-            display.textContent = currentCollectedItemsCount;
-            display.style.color = "";
-            display.style.textShadow = "";
-        }
-        if (expectedInfo) {
-            expectedInfo.style.color = "";
-            expectedInfo.textContent = `Esperadas según chatbot: ${totalExpected} prendas`;
-        }
-
-        const detailsList = document.getElementById("modal-items-details-list");
-        if (detailsList) {
-            detailsList.style.display = "block";
-            let detailsHtml = `<div style="font-weight: 700; color: var(--secondary); margin-bottom: 4px; border-bottom: 1px solid var(--border); padding-bottom: 3px; text-align: left;">👔 Artículos a Verificar:</div>`;
-            groupItems.forEach(item => {
-                if (item.items && item.items.length > 0) {
-                    detailsHtml += `
-                        <div style="font-size: 11px; font-weight: 700; color: var(--primary); margin-top: 4px; text-align: left;">🎟️ #${item.ticket_number || 'N/A'}:</div>
-                        ${item.items.map(sub => `
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 500; text-align: left; padding-left: 6px;">
-                                <span>• ${sub.quantity}x ${escapeHtml(sub.type)}</span>
-                                <span style="color: var(--text-muted);">$${sub.price.toLocaleString()}</span>
+        groupItems.forEach(item => {
+            if (item.items && item.items.length > 0) {
+                item.items.forEach(sub => {
+                    const key = `${item.id}_${sub.type}`;
+                    currentCollectedItemsMap[key] = sub.quantity; // Por defecto el esperado
+                    tableHtml += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:middle;">#${item.ticket_number || 'N/A'}</td>
+                            <td style="padding:8px 4px; vertical-align:middle;">
+                                <div style="font-weight:600;">${escapeHtml(sub.type)}</div>
+                                <div style="font-size:10px; color:var(--text-muted); font-style:italic;">Esperadas: ${sub.quantity} ud.</div>
+                            </td>
+                            <td style="padding:8px 4px; text-align:center; vertical-align:middle;">
+                                <div style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-input); padding:2px 6px; border-radius:8px; border:1px solid var(--border);">
+                                    <button class="btn" onclick="adjustGroupedItemCount('${item.id}', '${escapeHtml(sub.type)}', -1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">-</button>
+                                    <span id="count-${item.id}-${escapeHtml(sub.type)}" style="font-weight:700; font-size:12px; min-width:18px; text-align:center; color:var(--text-main);">${sub.quantity}</span>
+                                    <button class="btn" onclick="adjustGroupedItemCount('${item.id}', '${escapeHtml(sub.type)}', 1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">+</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } else {
+                const key = `${item.id}_prendas_generales`;
+                const expected = item.expected_items || 1;
+                currentCollectedItemsMap[key] = expected;
+                tableHtml += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                        <td style="padding:8px 4px; font-weight:700; color:var(--primary); vertical-align:middle;">#${item.ticket_number || 'N/A'}</td>
+                        <td style="padding:8px 4px; vertical-align:middle;">
+                            <div style="font-weight:600;">Prendas Generales</div>
+                            <div style="font-size:10px; color:var(--text-muted); font-style:italic;">Esperadas: ${expected} ud.</div>
+                        </td>
+                        <td style="padding:8px 4px; text-align:center; vertical-align:middle;">
+                            <div style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-input); padding:2px 6px; border-radius:8px; border:1px solid var(--border);">
+                                <button class="btn" onclick="adjustGroupedItemCount('${item.id}', 'prendas_generales', -1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">-</button>
+                                <span id="count-${item.id}-prendas_generales" style="font-weight:700; font-size:12px; min-width:18px; text-align:center; color:var(--text-main);">${expected}</span>
+                                <button class="btn" onclick="adjustGroupedItemCount('${item.id}', 'prendas_generales', 1)" style="width:20px; height:20px; border-radius:4px; padding:0; display:flex; align-items:center; justify-content:center; font-size:12px; background:var(--bg-card); border-color:var(--border); font-weight:bold; color:var(--text-main);">+</button>
                             </div>
-                        `).join('')}
-                    `;
-                } else {
-                    detailsHtml += `
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 500; text-align: left; margin-top: 4px;">
-                            <span>• Pedido #${item.ticket_number || 'N/A'}: ${item.expected_items || 1} prendas</span>
-                            <span style="color: var(--text-muted);">$${item.amount.toLocaleString()}</span>
-                        </div>
-                    `;
-                }
-            });
-            detailsList.innerHTML = detailsHtml;
-        }
+                        </td>
+                    </tr>
+                `;
+            }
+        });
+        
+        tableHtml += `
+                </tbody>
+            </table>
+        `;
+        document.getElementById("modal-garments-verification-table").innerHTML = tableHtml;
+        updateGroupedItemsSummary();
 
-        // Resetear simuladores
-        isQRScanActive = false;
+        // Resetear foto y firma
         isPhotoCaptured = false;
         hasSigned = false;
         updateCompleteButtonState();
-
-        const btn = document.getElementById("qr-scan-btn");
-        if (btn) {
-            btn.style.display = "block";
-            btn.innerHTML = "📷 Iniciar Scanner de Prenda";
-            btn.style.color = "";
-            btn.style.borderColor = "";
-        }
         
-        const screen = document.getElementById("qr-scanner-screen");
-        if (screen) screen.style.display = "none";
+        const deleteBtn = document.getElementById("photo-delete-btn");
+        if (deleteBtn) deleteBtn.style.display = "none";
 
         const placeholder = document.getElementById("photo-upload-placeholder");
         if (placeholder) placeholder.style.display = "flex";

@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.9">
+    <link rel="stylesheet" href="styles.css?v=1.0.10">
 </head>
 <body class="theme-dark">
 
@@ -96,32 +96,12 @@
                     Monto a reportar: <strong style="color: var(--text-main)" id="modal-amount">$0</strong>
                 </p>
 
-                <!-- Escaneo de Prenda QR -->
-                <div class="input-group">
-                    <label>Escanear Prenda/QR (Validación)</label>
-                    <button class="btn btn-maps" id="qr-scan-btn" style="border-style: dashed; padding: 10px; font-weight:600;" onclick="startQRScan()">
-                        📷 Iniciar Scanner de Prenda
-                    </button>
-                    <!-- Scanner animado -->
-                    <div class="qr-scanner-view" id="qr-scanner-screen">
-                        <div class="qr-scanner-laser"></div>
-                        <div class="qr-scanner-rect"></div>
-                    </div>
-                    <!-- Entrada QR manual -->
-                    <div id="qr-manual-input-box" style="margin-top: 8px; display: none;">
-                        <div style="display: flex; gap: 6px;">
-                            <input type="text" id="qr-manual-value" placeholder="Ingrese código de barra/QR" style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); font-size: 12px; outline: none; border-color: rgba(255,255,255,0.1);">
-                            <button class="btn btn-action" onclick="validateManualQR()" style="padding: 0 12px; font-size: 11px; height: 32px; border-radius: 8px;">Validar</button>
-                        </div>
-                    </div>
-                    <div style="text-align: right; margin-top: 4px;">
-                        <span id="qr-manual-toggle" style="font-size: 11px; color: var(--primary); cursor: pointer; font-weight: 500;" onclick="toggleManualQRInput()">Ingresar manualmente</span>
-                    </div>
-                </div>
-
                 <!-- Foto de Evidencia -->
                 <div class="input-group">
-                    <label>Evidencia de Entrega (Foto)</label>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+                        <label style="margin: 0;">Evidencia de Entrega (Foto)</label>
+                        <span id="photo-delete-btn" style="font-size:11px; color:#ef4444; cursor:pointer; font-weight:bold; display:none;" onclick="clearDeliveryPhoto()">[Eliminar]</span>
+                    </div>
                     <div class="photo-placeholder" id="photo-upload-placeholder" onclick="triggerCameraInput()">
                         <span style="font-size:20px;">📷</span>
                         <span id="photo-status" style="font-weight:600;">Tomar foto obligatoria</span>
@@ -131,16 +111,11 @@
                     <img id="photo-preview-box" class="photo-preview-img" alt="Entrega simulada">
                 </div>
 
-                <!-- Conteo Físico de Prendas -->
+                <!-- Control Manual de Prendas -->
                 <div class="input-group">
-                    <label>Control de Prendas Físicas (Conteo)</label>
-                    <div style="display:flex; justify-content:center; align-items:center; gap:20px; background:var(--bg-input); padding:8px 12px; border-radius:14px; border:1px solid var(--border);">
-                        <button class="btn" onclick="adjustItemCount(-1)" style="width:38px; height:38px; border-radius:50%; padding:0; display:flex; align-items:center; justify-content:center; font-size:18px; background:var(--bg-card); font-weight:bold; border-color:var(--border);">-</button>
-                        <span id="modal-items-count-display" style="font-size:20px; font-weight:700; min-width:40px; text-align:center;">1</span>
-                        <button class="btn" onclick="adjustItemCount(1)" style="width:38px; height:38px; border-radius:50%; padding:0; display:flex; align-items:center; justify-content:center; font-size:18px; background:var(--bg-card); font-weight:bold; border-color:var(--border);">+</button>
-                    </div>
-                    <span id="modal-expected-items-info" style="font-size:11px; color:var(--text-muted); text-align:center; display:block; margin-top:2px;">Esperadas según chatbot: 1 prenda</span>
-                    <div id="modal-items-details-list" style="margin-top: 8px; font-size: 11px; color: var(--text-main); background: rgba(255,255,255,0.02); padding: 8px; border-radius: 8px; border: 1px dashed var(--border); display: none;"></div>
+                    <label>Control de Prendas (Verificación Manual)</label>
+                    <div id="modal-garments-verification-table" style="margin-top: 5px;"></div>
+                    <div id="modal-items-count-summary" style="font-size: 11px; margin-top: 6px; text-align: center; color: var(--text-muted); font-weight: 500;"></div>
                 </div>
 
                 <!-- Firma Digital Canvas -->
@@ -202,7 +177,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.9"></script>
+    <script src="app.js?v=1.0.10"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {
