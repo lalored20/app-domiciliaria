@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.19">
+    <link rel="stylesheet" href="styles.css?v=1.0.20">
 </head>
 <body class="theme-dark">
 
@@ -188,11 +188,27 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Modal de Fachada del Cliente (Detalle específico) -->
+        <div class="modal" id="facade-detail-modal" style="display: none;">
+            <div class="modal-content" style="max-height: 80vh; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                    <h2 style="margin: 0; font-size: 18px;">Fachada y Ubicación GPS</h2>
+                    <span style="font-size: 20px; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="closeFacadeModal()">×</span>
+                </div>
+                <div style="overflow-y: auto; flex: 1; padding: 15px 0; text-align: center;" id="facade-modal-body">
+                    <!-- Contenido inyectado por JS -->
+                </div>
+                <div class="modal-buttons" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 0;">
+                    <button class="btn btn-cancel" onclick="closeFacadeModal()" style="width: 100%;">Cerrar</button>
+                </div>
+            </div>
+        </div>
 
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.19"></script>
+    <script src="app.js?v=1.0.20"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {

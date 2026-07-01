@@ -637,6 +637,25 @@ function createDeliveryCard(d) {
     card.className = `card ${d.status === 'EN_RUTA' ? 'active-route' : ''}`;
     card.setAttribute('data-id', d.id);
     
+    const hasFacade = d.facade_photo || (d.facade_latitude && d.facade_longitude);
+    let facadePillHtml = "";
+    
+    if (hasFacade) {
+        facadePillHtml = `
+            <div onclick="openFacadeModal(event, '${d.id}')" style="margin-top: 6px; padding: 6px 10px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(16, 185, 129, 0.15)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.08)'">
+                <span style="color: #10b981; font-weight: 700; display: flex; align-items: center; gap: 4px;">🏡 Fachada guardada (Foto + GPS)</span>
+                <span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">Ver ➔</span>
+            </div>
+        `;
+    } else {
+        facadePillHtml = `
+            <div onclick="captureFacadeAndGPSFromCard(event, '${d.id}')" style="margin-top: 6px; padding: 6px 10px; border: 1px dashed rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.02); border-radius: 8px; font-size: 11px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(139, 92, 246, 0.08)'; this.style.borderColor='var(--primary)';" onmouseout="this.style.background='rgba(139, 92, 246, 0.02)'; this.style.borderColor='rgba(139, 92, 246, 0.4)';">
+                <span style="color: var(--primary); font-weight: 700; display: flex; align-items: center; gap: 4px;">📷 Registrar Fachada & GPS</span>
+                <span style="font-size: 10px; color: var(--text-muted); font-weight: 600;">Tomar ➔</span>
+            </div>
+        `;
+    }
+    
     let statusClass = "pending";
     let statusLabel = "Pendiente";
     if (d.status === "EN_RUTA") {
@@ -714,6 +733,7 @@ function createDeliveryCard(d) {
                     ${formatShortAddress(d.address)}
                 </span>
             </div>
+            ${facadePillHtml}
         </div>
         <div class="price-row">
             <div>
@@ -2016,15 +2036,80 @@ async function saveFacadeData(clientPhone, photoBase64, lat, lng) {
     // 3. Sincronizar inmediatamente
     syncData();
     
-    // 4. Refrescar modal de detalles
+    // 4. Re-renderizar la vista principal
+    const currentView = document.getElementById("main-app-content");
+    if (currentView) {
+        currentView.innerHTML = "";
+        renderDeliveriesView(currentView);
+    }
+    
+    // 5. Refrescar modal de fachada si estaba abierto
     if (activeFacadeOrderId) {
-        openChatTranscriptionModal(activeFacadeOrderId);
+        openFacadeModal(null, activeFacadeOrderId);
     }
 }
 
 function openGpsMaps(lat, lng) {
     const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
     window.open(url, "_blank");
+}
+
+// Modal de detalles específicos de Fachada y GPS
+function openFacadeModal(event, orderId) {
+    if (event) event.stopPropagation(); // Evitar abrir otros eventos del card
+    
+    const d = deliveries.find(item => item.id === orderId);
+    if (!d) return;
+    
+    const hasPhoto = d.facade_photo && d.facade_photo.trim() !== "";
+    const hasGps = d.facade_latitude && d.facade_longitude;
+    
+    let modalBodyHtml = `
+        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
+            <div style="text-align: left; width: 100%; font-size: 13px; color: var(--text-main); line-height: 1.5; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px; border: 1px solid var(--border); box-sizing: border-box;">
+                <div style="margin-bottom: 2px;"><strong>Cliente:</strong> ${escapeHtml(d.client_name)}</div>
+                <div style="margin-bottom: 2px;"><strong>Dirección:</strong> ${escapeHtml(d.address)}</div>
+                ${hasGps ? `<div><strong>GPS:</strong> ${d.facade_latitude.toFixed(6)}, ${d.facade_longitude.toFixed(6)}</div>` : ''}
+            </div>
+            
+            ${hasPhoto ? `
+                <div style="position: relative; width: 100%; max-height: 250px; border-radius: 12px; overflow: hidden; border: 2px solid var(--border); box-sizing: border-box;">
+                    <img src="${d.facade_photo}" onclick="openLightbox('${d.facade_photo}')" style="width: 100%; height: auto; max-height: 250px; object-fit: cover; cursor: zoom-in;" title="Ver fachada completa">
+                </div>
+            ` : `
+                <div style="padding: 20px; text-align: center; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 12px; width: 100%; box-sizing: border-box;">
+                    Sin foto de fachada guardada.
+                </div>
+            `}
+            
+            <div style="display: flex; gap: 8px; width: 100%; justify-content: center; flex-wrap: wrap; margin-top: 5px;">
+                ${hasGps ? `
+                    <button class="btn" onclick="openGpsMaps(${d.facade_latitude}, ${d.facade_longitude})" style="background: #10b981; border-color: #10b981; color: white; padding: 8px 16px; font-weight: 700; height: 35px; border-radius: 10px;">
+                        🗺️ Iniciar GPS Maps
+                    </button>
+                ` : ''}
+                <button class="btn" onclick="captureFacadeAndGPS('${d.id}')" style="background: rgba(139,92,246,0.1); border-color: var(--primary); color: var(--primary); padding: 8px 16px; font-weight: 700; height: 35px; border-radius: 10px;">
+                    📷 Actualizar Foto / GPS
+                </button>
+            </div>
+        </div>
+    `;
+    
+    const bodyEl = document.getElementById("facade-modal-body");
+    if (bodyEl) bodyEl.innerHTML = modalBodyHtml;
+    
+    const modalEl = document.getElementById("facade-detail-modal");
+    if (modalEl) modalEl.style.display = "flex";
+}
+
+function closeFacadeModal() {
+    const modalEl = document.getElementById("facade-detail-modal");
+    if (modalEl) modalEl.style.display = "none";
+}
+
+function captureFacadeAndGPSFromCard(event, orderId) {
+    if (event) event.stopPropagation(); // Evitar click propagations
+    captureFacadeAndGPS(orderId);
 }
 
 // Abrir modal
@@ -2315,40 +2400,6 @@ function openChatTranscriptionModal(id) {
     document.getElementById('chat-modal-client-name').textContent = d.client_name;
     document.getElementById('chat-modal-phone').textContent = `Celular: +${d.client_phone}`;
 
-    // Fachada y GPS
-    let facadeHtml = "";
-    const hasFacadePhoto = d.facade_photo && d.facade_photo.trim() !== "";
-    const hasFacadeGps = d.facade_latitude && d.facade_longitude;
-    
-    if (hasFacadePhoto || hasFacadeGps) {
-        facadeHtml = `
-            <div style="margin-top: 8px; padding: 10px; background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 8px; font-size: 11px;">
-                <div style="font-weight: 700; color: #10b981; margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">
-                    🏡 FACHADA Y UBICACIÓN GUARDADA
-                </div>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    ${hasFacadePhoto ? `
-                        <img src="${d.facade_photo}" onclick="openLightbox('${d.facade_photo}')" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3); cursor: zoom-in;" title="Ampliar fachada">
-                    ` : ''}
-                    <div style="flex: 1;">
-                        ${hasFacadeGps ? `
-                            <div><strong>Coordenadas GPS:</strong> ${d.facade_latitude.toFixed(6)}, ${d.facade_longitude.toFixed(6)}</div>
-                            <button class="btn" onclick="openGpsMaps(${d.facade_latitude}, ${d.facade_longitude})" style="margin-top: 4px; padding: 2px 6px; font-size: 10px; height: auto; background: #10b981; border-color: #10b981; color: white; display: inline-flex; align-items: center; gap: 3px; line-height: 1.2;">
-                                🗺️ Navegar a Fachada
-                            </button>
-                        ` : '<div style="color: var(--text-muted); font-style: italic;">Sin coordenadas GPS guardadas.</div>'}
-                    </div>
-                </div>
-            </div>
-        `;
-    } else {
-        facadeHtml = `
-            <div style="margin-top: 8px; padding: 8px; background: rgba(255, 255, 255, 0.01); border: 1px dashed var(--border); border-radius: 8px; font-size: 11px; text-align: center; color: var(--text-muted);">
-                Sin foto de fachada ni coordenadas GPS de la casa.
-            </div>
-        `;
-    }
-
     // 8. Caja de Resumen Integrado (Pulido, sin tanto texto, súper ordenado)
     const summaryBoxHtml = `
         <div class="summary-route-box" style="padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: var(--text-main); line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
@@ -2359,14 +2410,6 @@ function openChatTranscriptionModal(id) {
                 <div><strong>Dirección de entrega:</strong> ${formatShortAddress(d.address)}</div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"><strong>Original escrita:</strong> "${escapeHtml(d.raw_address || d.address)}"</div>
                 ${routingHtml}
-                
-                ${facadeHtml}
-                
-                <div style="text-align: right; margin-top: 6px;">
-                    <button class="btn" onclick="captureFacadeAndGPS('${d.id}')" style="padding: 3px 8px; font-size: 10px; height: 22px; background: rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.2); color: var(--primary); display: inline-flex; align-items: center; gap: 3px; font-weight: bold; cursor: pointer;">
-                        📷 Registrar Fachada & GPS
-                    </button>
-                </div>
             </div>
 
             <!-- Sección: Prendas y Servicios -->
