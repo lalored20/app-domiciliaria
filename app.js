@@ -2394,8 +2394,8 @@ function openFacadeModal(event, orderId) {
             
             <!-- Datos del Cliente -->
             <div style="text-align: left; width: 100%; font-size: 12px; color: var(--text-main); line-height: 1.5; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 12px; border: 1px solid var(--border); box-sizing: border-box; display: flex; flex-direction: column; gap: 4px;">
-                <div>👤 <strong>Cliente:</strong> ${escapeHtml(d.client_name)}</div>
-                <div>📍 <strong>Dirección:</strong> ${escapeHtml(d.address)}</div>
+                <div>👤 <strong>Cliente:</strong> <span id="facade-modal-client-name" style="font-weight: 500;">${escapeHtml(d.client_name)}</span></div>
+                <div>📍 <strong>Dirección:</strong> <span id="facade-modal-client-address" style="font-weight: 500;">${escapeHtml(d.address)}</span></div>
             </div>
             
             <!-- Galería de Fotos -->
@@ -2443,6 +2443,29 @@ function openFacadeModal(event, orderId) {
 function closeFacadeModal() {
     const modalEl = document.getElementById("facade-detail-modal");
     if (modalEl) modalEl.style.display = "none";
+    activeFacadeOrderId = null; // Limpiar id al cerrar para evitar actualizaciones en segundo plano innecesarias
+}
+
+function updateFacadeModalTexts(orderId) {
+    if (activeFacadeOrderId !== orderId) return;
+    const d = deliveries.find(item => item.id === orderId);
+    if (!d) return;
+    
+    // Quirúrgico: Actualizar textos de Cliente y Dirección en el modal si existen en el DOM
+    const nameEl = document.getElementById("facade-modal-client-name");
+    const addrEl = document.getElementById("facade-modal-client-address");
+    
+    if (nameEl) nameEl.textContent = d.client_name;
+    if (addrEl) addrEl.textContent = d.address;
+    
+    // También actualizar el estado de las coordenadas en vivo si están registradas
+    const gpsStatusEl = document.getElementById("facade-gps-status");
+    if (gpsStatusEl) {
+        const hasGps = d.facade_latitude && d.facade_longitude;
+        gpsStatusEl.innerHTML = hasGps 
+            ? `📌 Coordenadas guardadas:<br/><strong style="color:var(--text-main); font-size:12px;">${d.facade_latitude.toFixed(6)}, ${d.facade_longitude.toFixed(6)}</strong>`
+            : '❌ Sin coordenadas GPS de fachada registradas para este cliente.';
+    }
 }
 
 function captureFacadeAndGPSFromCard(event, orderId) {
@@ -3302,9 +3325,9 @@ async function runBackgroundSync() {
                         renderLocalidades();
                         renderContent();
                         
-                        // Si el modal de la fachada está abierto para una orden, re-renderizarlo para mostrar la dirección resuelta en vivo
+                        // Si el modal de la fachada está abierto para una orden, actualizar quirúrgicamente sus textos en vivo sin redibujar el DOM
                         if (activeFacadeOrderId) {
-                            openFacadeModal(null, activeFacadeOrderId);
+                            updateFacadeModalTexts(activeFacadeOrderId);
                         }
                     }
                 }
