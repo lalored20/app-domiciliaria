@@ -140,7 +140,7 @@ async function initApp() {
             const keys = await promiseWithTimeout(db.deliveries.toCollection().primaryKeys(), 1500, "Dexie primaryKeys timeout");
             const mockKeys = keys.filter(k => typeof k === 'string' && (/^d\d+$/.test(k) || k.startsWith('test_') || k.startsWith('web_')));
             if (mockKeys.length > 0) {
-                await db.deliveries.bulkDelete(mockKeys);
+                await promiseWithTimeout(db.deliveries.bulkDelete(mockKeys), 1500, "Dexie bulkDelete timeout");
                 addSystemLog(`🧹 Limpiados ${mockKeys.length} registros ficticios residuales de IndexedDB.`);
             }
         } catch (e) {
@@ -183,7 +183,7 @@ async function initApp() {
                     d.latitude = null;
                     d.longitude = null;
                     d.sync_pending = false; // Evitar subir el null erróneamente al servidor
-                    await db.deliveries.put(d);
+                    await promiseWithTimeout(db.deliveries.put(d), 1000, "Dexie put timeout");
                     needsReload = true;
                 }
             }
@@ -211,14 +211,27 @@ async function initApp() {
                     currentShift.expenses_detail = [];
                     currentShift.status = "ABIERTO";
                     currentShift.sync_pending = true;
-                    await db.shift.put(currentShift);
+                    await promiseWithTimeout(db.shift.put(currentShift), 1500, "Dexie shift.put rollover timeout");
                 }
             } else {
-                await db.shift.put(currentShift);
+                await promiseWithTimeout(db.shift.put(currentShift), 1500, "Dexie shift.put init timeout");
             }
             addSystemLog(`📦 Cargados ${deliveries.length} pedidos locales de IndexedDB.`);
         } catch (e) {
             console.error("Fallo inicializando base de datos local Dexie", e);
+            db = null;
+            // Eliminar la base de datos IndexedDB corrupta/bloqueada para que se recree limpia en la próxima carga
+            try {
+                if (typeof Dexie !== 'undefined') {
+                    Dexie.delete("AppDomiciliariaDB").catch(() => {});
+                }
+                if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
+                    indexedDB.deleteDatabase("AppDomiciliariaDB");
+                }
+                addSystemLog("🔧 Base de datos IndexedDB corrupta eliminada. Se recreará en la próxima carga.");
+            } catch (delErr) {
+                console.warn("No se pudo eliminar IndexedDB corrupta:", delErr);
+            }
             loadLocalStorageFallback();
         }
     } else {
@@ -1411,7 +1424,7 @@ function openMaps(id) {
 async function queueWhatsappMessage(phone, message, client_name = "", order_id = "", address = "", status = "") {
     if (db) {
         try {
-            await db.pending_wa_messages.add({
+            await promiseWithTimeout(db.pending_wa_messages.add({
                 phone,
                 message,
                 client_name,
@@ -1420,7 +1433,7 @@ async function queueWhatsappMessage(phone, message, client_name = "", order_id =
                 status,
                 timestamp: Date.now(),
                 attempts: 0
-            });
+            }), 2000, "Dexie pending_wa_messages.add timeout");
             addSystemLog(`📥 Cola WA: Mensaje para ${client_name || phone} encolado localmente.`);
         } catch (e) {
             console.error("Fallo al encolar mensaje de WhatsApp:", e);
@@ -2074,15 +2087,15 @@ async function deleteFacadePhoto(orderId, index) {
     });
     
     if (db) {
-        const localItems = await db.deliveries.where('client_phone').equals(d.client_phone).toArray();
+        const localItems = await promiseWithTimeout(db.deliveries.where('client_phone').equals(d.client_phone).toArray(), 2000, "Dexie facade delete query timeout");
         for (const item of localItems) {
             item.facade_photo = newVal;
             item.sync_pending = true;
-            await db.deliveries.put(item);
+            await promiseWithTimeout(db.deliveries.put(item), 1500, "Dexie facade delete put timeout");
         }
     }
     
-    syncData();
+    triggerBackgroundSync();
     
     const currentView = document.getElementById("main-app-content");
     if (currentView) {
@@ -2252,17 +2265,17 @@ async function saveFacadeData(clientPhone, photoBase64, lat, lng) {
     });
     
     if (db) {
-        const localItems = await db.deliveries.where('client_phone').equals(clientPhone).toArray();
+        const localItems = await promiseWithTimeout(db.deliveries.where('client_phone').equals(clientPhone).toArray(), 2000, "Dexie facade save query timeout");
         for (const item of localItems) {
             if (photoBase64) item.facade_photo = photoBase64;
             if (lat) item.facade_latitude = lat;
             if (lng) item.facade_longitude = lng;
             item.sync_pending = true;
-            await db.deliveries.put(item);
+            await promiseWithTimeout(db.deliveries.put(item), 1500, "Dexie facade save put timeout");
         }
     }
     
-    syncData();
+    triggerBackgroundSync();
     
     const currentView = document.getElementById("main-app-content");
     if (currentView) {
@@ -2957,17 +2970,17 @@ async function runBackgroundSync() {
     try {
         // 1. Sincronizar cola de mensajes de WhatsApp (Tanto para Supabase como para local)
         if (db) {
-            const pendingMessages = await db.pending_wa_messages.toArray();
+            const pendingMessages = await promiseWithTimeout(db.pending_wa_messages.toArray(), 2000, "Dexie WA messages toArray timeout");
             for (const msg of pendingMessages) {
                 if (msg.attempts > 5) {
                     addSystemLog(`⚠️ Cola WA: Descartado mensaje para ${msg.client_name || msg.phone} tras 5 intentos.`);
-                    await db.pending_wa_messages.delete(msg.id);
+                    await promiseWithTimeout(db.pending_wa_messages.delete(msg.id), 1500, "Dexie WA msg delete timeout");
                     continue;
                 }
                 
                 try {
                     msg.attempts++;
-                    await db.pending_wa_messages.put(msg);
+                    await promiseWithTimeout(db.pending_wa_messages.put(msg), 1500, "Dexie WA msg put timeout");
                     
                     const response = await fetch("/api/whatsapp/send", {
                         method: "POST",
@@ -2983,7 +2996,7 @@ async function runBackgroundSync() {
                     });
                     
                     if (response.ok) {
-                        await db.pending_wa_messages.delete(msg.id);
+                        await promiseWithTimeout(db.pending_wa_messages.delete(msg.id), 1500, "Dexie WA msg success delete timeout");
                         addSystemLog(`✅ Cola WA: Mensaje pendiente para ${msg.client_name} enviado con éxito.`);
                         if (typeof loadWhatsappLogs === 'function') loadWhatsappLogs();
                     }
@@ -2997,7 +3010,7 @@ async function runBackgroundSync() {
         if (supabaseClient) {
             addSystemLog("🔄 Sync: Verificando datos locales con Supabase Cloud...");
             if (db) {
-                const pendingDeliveries = await db.deliveries.toArray();
+                const pendingDeliveries = await promiseWithTimeout(db.deliveries.toArray(), 2000, "Dexie sync deliveries toArray timeout");
                 const pendingList = pendingDeliveries.filter(d => d.sync_pending === true || d.sync_pending === 1);
                     
                 for (const d of pendingList) {
@@ -3024,14 +3037,14 @@ async function runBackgroundSync() {
                     const { error } = await supabaseClient.from('deliveries').upsert(payload);
                     if (!error) {
                         d.sync_pending = false;
-                        await db.deliveries.put(d);
+                        await promiseWithTimeout(db.deliveries.put(d), 1500, "Dexie sync delivery put timeout");
                         addSystemLog(`✅ Sync: Entrega ${d.client_name} subida a Supabase.`);
                     } else {
                         addSystemLog(`❌ Sync Error en entrega: ${error.message}`);
                     }
                 }
                 
-                const storedShift = await db.shift.get("shift_today");
+                const storedShift = await promiseWithTimeout(db.shift.get("shift_today"), 1500, "Dexie sync shift.get timeout");
                 if (storedShift && storedShift.sync_pending) {
                     addSystemLog("🔄 Sync: Sincronizando estado de caja a Supabase...");
                     const payload = {
@@ -3047,7 +3060,7 @@ async function runBackgroundSync() {
                         const { error } = await supabaseClient.from('driver_shifts').upsert(payload, { onConflict: 'driver_id, shift_date' });
                         if (!error) {
                             storedShift.sync_pending = false;
-                            await db.shift.put(storedShift);
+                            await promiseWithTimeout(db.shift.put(storedShift), 1500, "Dexie sync shift.put timeout");
                             addSystemLog("✅ Sync: Caja sincronizada con Supabase.");
                         } else {
                             addSystemLog(`❌ Sync Error en caja: ${error.message}`);
@@ -3058,97 +3071,153 @@ async function runBackgroundSync() {
         } else {
             // Sincronización LOCAL con Express backend
             addSystemLog("🔄 Sync: Verificando datos con servidor local...");
+            
+            let localD = [];
+            let isUsingLocalStorage = false;
+            
             if (db) {
-                const localD = await db.deliveries.toArray();
-                const pendingD = localD.filter(d => d.sync_pending === true || d.sync_pending === 1);
-                
-                // Enviar solo cambios locales pendientes al servidor local
-                const response = await fetch("/api/deliveries/sync", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ deliveries: pendingD })
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    if (result.success && result.data) {
-                        let updatedCount = 0;
-                        for (const serverD of result.data) {
-                            const localItem = localD.find(d => d.id === serverD.id || (d.chatbot_order_id && d.chatbot_order_id === serverD.chatbot_order_id));
-                            
-                            // Si no existe localmente, o no tenemos cambios pendientes locales y difiere del servidor en estado, coordenadas, dirección o localidad
-                            if (!localItem) {
-                                await db.deliveries.put(serverD);
+                try {
+                    localD = await promiseWithTimeout(db.deliveries.toArray(), 1200, "Timeout al leer entregas locales");
+                } catch (e) {
+                    console.warn("Fallo lectura de IndexedDB en sync local. Usando LocalStorage fallback:", e);
+                    localD = JSON.parse(localStorage.getItem("deliveries") || "[]");
+                    isUsingLocalStorage = true;
+                }
+            } else {
+                localD = JSON.parse(localStorage.getItem("deliveries") || "[]");
+                isUsingLocalStorage = true;
+            }
+            
+            const pendingD = localD.filter(d => d.sync_pending === true || d.sync_pending === 1);
+            
+            // Enviar solo cambios locales pendientes al servidor local
+            const response = await fetch("/api/deliveries/sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ deliveries: pendingD })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data) {
+                    let updatedCount = 0;
+                    for (const serverD of result.data) {
+                        const localItem = localD.find(d => d.id === serverD.id || (d.chatbot_order_id && d.chatbot_order_id === serverD.chatbot_order_id));
+                        
+                        if (!localItem) {
+                            localD.push(serverD);
+                            if (!isUsingLocalStorage) {
+                                try {
+                                    await promiseWithTimeout(db.deliveries.put(serverD), 1000, "Timeout al escribir entrega");
+                                } catch (e) {
+                                    isUsingLocalStorage = true;
+                                }
+                            }
+                            updatedCount++;
+                        } else {
+                            let localChanged = false;
+                            if (!localItem.sync_pending && localItem.status !== serverD.status) {
+                                localItem.status = serverD.status;
+                                localChanged = true;
+                            }
+                            if (
+                                localItem.client_phone !== serverD.client_phone ||
+                                localItem.latitude !== serverD.latitude ||
+                                localItem.longitude !== serverD.longitude ||
+                                localItem.address !== serverD.address ||
+                                localItem.localidad !== serverD.localidad ||
+                                localItem.items_comments !== serverD.items_comments ||
+                                localItem.collected_items !== serverD.collected_items ||
+                                localItem.facade_photo !== serverD.facade_photo ||
+                                localItem.facade_latitude !== serverD.facade_latitude ||
+                                localItem.facade_longitude !== serverD.facade_longitude
+                            ) {
+                                localItem.client_phone = serverD.client_phone;
+                                localItem.latitude = serverD.latitude;
+                                localItem.longitude = serverD.longitude;
+                                localItem.address = serverD.address;
+                                localItem.localidad = serverD.localidad;
+                                localItem.items_comments = serverD.items_comments;
+                                localItem.collected_items = serverD.collected_items;
+                                localItem.facade_photo = serverD.facade_photo;
+                                localItem.facade_latitude = serverD.facade_latitude;
+                                localItem.facade_longitude = serverD.facade_longitude;
+                                localChanged = true;
+                            }
+                            if (localChanged) {
+                                if (!isUsingLocalStorage) {
+                                    try {
+                                        await promiseWithTimeout(db.deliveries.put(localItem), 1000, "Timeout al guardar entrega");
+                                    } catch (e) {
+                                        isUsingLocalStorage = true;
+                                    }
+                                }
                                 updatedCount++;
-                            } else {
-                                let localChanged = false;
-                                // Actualizar estado solo si local no tiene cambios de estado pendientes
-                                if (!localItem.sync_pending && localItem.status !== serverD.status) {
-                                    localItem.status = serverD.status;
-                                    localChanged = true;
-                                }
-                                // Actualizar siempre teléfono, geolocalización, dirección, localidad resueltas, comentarios y conteo recolectado
-                                if (
-                                    localItem.client_phone !== serverD.client_phone ||
-                                    localItem.latitude !== serverD.latitude ||
-                                    localItem.longitude !== serverD.longitude ||
-                                    localItem.address !== serverD.address ||
-                                    localItem.localidad !== serverD.localidad ||
-                                    localItem.items_comments !== serverD.items_comments ||
-                                    localItem.collected_items !== serverD.collected_items ||
-                                    localItem.facade_photo !== serverD.facade_photo ||
-                                    localItem.facade_latitude !== serverD.facade_latitude ||
-                                    localItem.facade_longitude !== serverD.facade_longitude
-                                ) {
-                                    localItem.client_phone = serverD.client_phone;
-                                    localItem.latitude = serverD.latitude;
-                                    localItem.longitude = serverD.longitude;
-                                    localItem.address = serverD.address;
-                                    localItem.localidad = serverD.localidad;
-                                    localItem.items_comments = serverD.items_comments;
-                                    localItem.collected_items = serverD.collected_items;
-                                    localItem.facade_photo = serverD.facade_photo;
-                                    localItem.facade_latitude = serverD.facade_latitude;
-                                    localItem.facade_longitude = serverD.facade_longitude;
-                                    localChanged = true;
-                                }
-                                if (localChanged) {
-                                    await db.deliveries.put(localItem);
-                                    updatedCount++;
+                            }
+                        }
+                    }
+                    
+                    // Quitar flag sync_pending si el servidor reconoció los cambios
+                    for (const d of pendingD) {
+                        const localItem = localD.find(x => x.id === d.id);
+                        if (localItem && localItem.sync_pending) {
+                            localItem.sync_pending = false;
+                            if (!isUsingLocalStorage) {
+                                try {
+                                    await promiseWithTimeout(db.deliveries.put(localItem), 1000, "Timeout al remover sync_pending");
+                                } catch (e) {
+                                    isUsingLocalStorage = true;
                                 }
                             }
                         }
-                        
-                        // Quitar flag sync_pending si el servidor reconoció los cambios
-                        for (const d of pendingD) {
-                            if (d.sync_pending) {
-                                d.sync_pending = false;
-                                await db.deliveries.put(d);
-                            }
-                        }
-                        
+                    }
+                    
+                    if (isUsingLocalStorage) {
+                        localStorage.setItem("deliveries", JSON.stringify(localD));
+                    }
+                    
+                    if (updatedCount > 0 || isUsingLocalStorage) {
+                        deliveries = localD;
                         if (updatedCount > 0) {
                             addSystemLog(`✅ Sync: Descargados ${updatedCount} nuevos pedidos desde el webhook.`);
-                            deliveries = await db.deliveries.toArray();
-                            renderLocalidades();
-                            renderContent();
                         }
+                        renderLocalidades();
+                        renderContent();
                     }
                 }
-                
-                // Sincronizar Shift/Turno localmente
-                const storedShift = await db.shift.get("shift_today");
-                if (storedShift && storedShift.sync_pending) {
-                    const shiftRes = await fetch("/api/shift/sync", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ shift: storedShift })
-                    });
-                    if (shiftRes.ok) {
-                        storedShift.sync_pending = false;
-                        await db.shift.put(storedShift);
-                        addSystemLog("✅ Sync: Caja local sincronizada con el servidor.");
+            }
+            
+            // Sincronizar Shift/Turno localmente
+            let storedShift = null;
+            if (db && !isUsingLocalStorage) {
+                try {
+                    storedShift = await promiseWithTimeout(db.shift.get("shift_today"), 1200, "Timeout al obtener turno");
+                } catch (e) {
+                    storedShift = JSON.parse(localStorage.getItem("shift") || "null");
+                    isUsingLocalStorage = true;
+                }
+            } else {
+                storedShift = JSON.parse(localStorage.getItem("shift") || "null");
+            }
+            
+            if (storedShift && storedShift.sync_pending) {
+                const shiftRes = await fetch("/api/shift/sync", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ shift: storedShift })
+                });
+                if (shiftRes.ok) {
+                    storedShift.sync_pending = false;
+                    if (db && !isUsingLocalStorage) {
+                        try {
+                            await promiseWithTimeout(db.shift.put(storedShift), 1000, "Timeout al guardar turno");
+                        } catch (e) {
+                            localStorage.setItem("shift", JSON.stringify(storedShift));
+                        }
+                    } else {
+                        localStorage.setItem("shift", JSON.stringify(storedShift));
                     }
+                    addSystemLog("✅ Sync: Caja local sincronizada con el servidor.");
                 }
             }
         }
@@ -3201,12 +3270,12 @@ async function syncDataOffline() {
                     items_comments: item.items_comments || null
                 };
                 if (db) {
-                    await db.deliveries.put(mapped);
+                    await promiseWithTimeout(db.deliveries.put(mapped), 1500, "Dexie dailyRoute put timeout");
                 }
             }
             
             if (db) {
-                deliveries = await db.deliveries.toArray();
+                deliveries = await promiseWithTimeout(db.deliveries.toArray(), 2000, "Dexie dailyRoute toArray timeout");
             }
             renderLocalidades();
             renderContent();
@@ -3222,8 +3291,8 @@ async function syncDataOffline() {
 async function resetDatabase() {
     if (confirm("¿Desea restaurar los datos iniciales?")) {
         if (db) {
-            await db.deliveries.clear();
-            await db.shift.clear();
+            await promiseWithTimeout(db.deliveries.clear(), 2000, "Dexie reset deliveries.clear timeout");
+            await promiseWithTimeout(db.shift.clear(), 2000, "Dexie reset shift.clear timeout");
         }
         localStorage.clear();
         window.location.reload();
@@ -3234,7 +3303,7 @@ async function resetDatabase() {
 async function saveDeliveries() {
     if (db) {
         for (const d of deliveries) {
-            await db.deliveries.put(d);
+            await promiseWithTimeout(db.deliveries.put(d), 1500, "Dexie saveDeliveries put timeout");
         }
     } else {
         localStorage.setItem("deliveries", JSON.stringify(deliveries));
@@ -3243,7 +3312,7 @@ async function saveDeliveries() {
 
 async function saveShift() {
     if (db) {
-        await db.shift.put(currentShift);
+        await promiseWithTimeout(db.shift.put(currentShift), 1500, "Dexie saveShift put timeout");
     } else {
         localStorage.setItem("shift", JSON.stringify(currentShift));
     }

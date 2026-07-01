@@ -1,0 +1,32 @@
+[
+  {
+    "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\app.js",
+    "rel_path": "app.js",
+    "project": "APP DOMICILIARIA",
+    "ext": ".js"
+  },
+  {
+    "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\base.md",
+    "rel_path": "base.md",
+    "project": "APP DOMICILIARIA",
+    "ext": ".md"
+  },
+  {
+    "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\server.js",
+    "rel_path": "server.js",
+    "project": "APP DOMICILIARIA",
+    "ext": ".js"
+  },
+  {
+    "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\supabase_setup.sql",
+    "rel_path": "supabase_setup.sql",
+    "project": "APP DOMICILIARIA",
+    "ext": ".sql"
+  },
+  {
+    "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\webhook.js",
+    "rel_path": "webhook.js",
+    "project": "APP DOMICILIARIA",
+    "ext": ".js"
+  }
+]
