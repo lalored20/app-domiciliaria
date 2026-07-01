@@ -5,12 +5,6 @@
 // causando crash del navegador. LocalStorage + sync con servidor es suficiente y estable.
 let db = null;
 
-// Limpiar cualquier IndexedDB corrupta residual al cargar
-try {
-    if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
-        indexedDB.deleteDatabase("AppDomiciliariaDB");
-    }
-} catch(e) {}
 
 // Datos de prueba iniciales
 const DEFAULT_DELIVERIES = [];
@@ -216,18 +210,6 @@ async function initApp() {
         } catch (e) {
             console.error("Fallo inicializando base de datos local Dexie", e);
             db = null;
-            // Eliminar la base de datos IndexedDB corrupta/bloqueada para que se recree limpia en la próxima carga
-            try {
-                if (typeof Dexie !== 'undefined') {
-                    Dexie.delete("AppDomiciliariaDB").catch(() => {});
-                }
-                if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
-                    indexedDB.deleteDatabase("AppDomiciliariaDB");
-                }
-                addSystemLog("🔧 Base de datos IndexedDB corrupta eliminada. Se recreará en la próxima carga.");
-            } catch (delErr) {
-                console.warn("No se pudo eliminar IndexedDB corrupta:", delErr);
-            }
             loadLocalStorageFallback();
         }
     } else {
