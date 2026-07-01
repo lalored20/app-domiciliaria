@@ -2,7 +2,59 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <script>
+        (function() {
+            var isReporting = false;
+            function sendLog(type, msg, stack) {
+                if (isReporting) return;
+                isReporting = true;
+                fetch('/api/log-error', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        error: "[" + type + "] " + String(msg),
+                        url: window.location.href,
+                        line: 0,
+                        col: 0,
+                        stack: stack || ''
+                    })
+                }).catch(function() {})
+                  .finally(function() { isReporting = false; });
+            }
 
+            // Capturar excepciones no controladas
+            window.onerror = function(message, source, lineno, colno, error) {
+                sendLog("ERROR", message + " (" + source + ":" + lineno + ":" + colno + ")", error ? error.stack : '');
+                return false;
+            };
+
+            // Capturar promesas rechazadas no controladas
+            window.onunhandledrejection = function(event) {
+                var reason = event.reason;
+                var msg = reason ? (reason.message || reason) : 'Unhandled promise rejection';
+                var stack = reason && reason.stack ? reason.stack : '';
+                sendLog("UNHANDLED_REJECTION", msg, stack);
+            };
+
+            // Interceptar console.error y console.warn
+            var origError = console.error;
+            console.error = function() {
+                var args = Array.prototype.slice.call(arguments);
+                origError.apply(console, args);
+                sendLog("CONSOLE_ERROR", args.join(' '));
+            };
+
+            var origWarn = console.warn;
+            console.warn = function() {
+                var args = Array.prototype.slice.call(arguments);
+                origWarn.apply(console, args);
+                var logStr = args.join(' ');
+                if (logStr.indexOf('[Geocoder]') === -1 && logStr.indexOf('Dexie') === -1) {
+                    sendLog("CONSOLE_WARN", logStr);
+                }
+            };
+        })();
+    </script>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -21,7 +73,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.34">
+    <link rel="stylesheet" href="styles.css?v=1.0.35">
 </head>
 <body class="theme-dark">
 
@@ -212,7 +264,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.34"></script>
+    <script src="app.js?v=1.0.35"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {
