@@ -1759,14 +1759,8 @@ function renderGarmentsVerificationTable() {
                             <div style="font-weight:600; font-size:12px;">${escapeHtml(sub.type)}</div>
                             <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Esperadas: ${sub.quantity} ud.</div>
                             
-                            <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-                                <input type="text" id="comment-${item.id}-${escapeHtml(sub.type)}" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', '${escapeHtml(sub.type)}', this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
-                                <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
-                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
-                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
-                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
-                                    <span class="badge-quick" onclick="applyQuickComment('${item.id}', '${escapeHtml(sub.type)}', '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
-                                </div>
+                            <div style="margin-top:4px;">
+                                <input type="text" id="comment-${item.id}-${escapeHtml(sub.type)}" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', '${escapeHtml(sub.type)}', this.value)" style="width:100%; padding:6px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
                             </div>
                         </td>
                         <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
@@ -1793,14 +1787,8 @@ function renderGarmentsVerificationTable() {
                         <div style="font-weight:600; font-size:12px;">Prendas Generales</div>
                         <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Esperadas: ${item.expected_items || 1} ud.</div>
                         
-                        <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-                            <input type="text" id="comment-${item.id}-prendas_generales" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', 'prendas_generales', this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
-                            <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
-                                <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
-                                <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
-                                <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
-                                <span class="badge-quick" onclick="applyQuickComment('${item.id}', 'prendas_generales', '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
-                            </div>
+                        <div style="margin-top:4px;">
+                            <input type="text" id="comment-${item.id}-prendas_generales" placeholder="Reportar daño, rotura, incoherencia..." value="${escapeHtml(comment)}" oninput="updateItemComment('${item.id}', 'prendas_generales', this.value)" style="width:100%; padding:6px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
                         </div>
                     </td>
                     <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
@@ -1827,14 +1815,8 @@ function renderGarmentsVerificationTable() {
                     </div>
                     <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Añadida manualmente</div>
                     
-                    <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
-                        <input type="text" id="comment-extra-${index}" placeholder="Reportar detalle/novedad..." value="${escapeHtml(extra.comment)}" oninput="updateExtraGarmentComment(${index}, this.value)" style="width:100%; padding:4px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
-                        <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
-                            <span class="badge-quick" onclick="applyExtraQuickComment(${index}, '✅ Sin novedad')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2); cursor:pointer; font-weight:500;">Sin novedad</span>
-                            <span class="badge-quick" onclick="applyExtraQuickComment(${index}, '⚠️ Rota / Rasgada')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(239,68,68,0.1); color:#ef4444; border:1px solid rgba(239,68,68,0.2); cursor:pointer; font-weight:500;">Dañada</span>
-                            <span class="badge-quick" onclick="applyExtraQuickComment(${index}, '❌ Faltante')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(245,158,11,0.1); color:#f59e0b; border:1px solid rgba(245,158,11,0.2); cursor:pointer; font-weight:500;">Faltante</span>
-                            <span class="badge-quick" onclick="applyExtraQuickComment(${index}, '📝 Incoherencia en tipo')" style="font-size:9px; padding:2px 5px; border-radius:4px; background:rgba(139,92,246,0.1); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); cursor:pointer; font-weight:500;">Incoherente</span>
-                        </div>
+                    <div style="margin-top:4px;">
+                        <input type="text" id="comment-extra-${index}" placeholder="Reportar detalle/novedad..." value="${escapeHtml(extra.comment)}" oninput="updateExtraGarmentComment(${index}, this.value)" style="width:100%; padding:6px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
                     </div>
                 </td>
                 <td style="padding:8px 4px; text-align:center; vertical-align:top; padding-top:12px;">
@@ -1865,53 +1847,7 @@ function updateExtraGarmentComment(index, val) {
     }
 }
 
-function toggleCommentBadge(currentVal, badgeText) {
-    let text = currentVal || "";
-    const tags = [
-        "✅ Sin novedad",
-        "⚠️ Rota / Rasgada",
-        "❌ Faltante",
-        "📝 Incoherencia en tipo"
-    ];
-    
-    if (badgeText === "✅ Sin novedad") {
-        if (text.includes("✅ Sin novedad")) {
-            text = text.replace("✅ Sin novedad", "");
-        } else {
-            tags.forEach(t => {
-                if (t !== "✅ Sin novedad") {
-                    text = text.replace(t, "");
-                }
-            });
-            text = text ? `${text} - ✅ Sin novedad` : "✅ Sin novedad";
-        }
-    } else {
-        text = text.replace("✅ Sin novedad", "");
-        if (text.includes(badgeText)) {
-            text = text.replace(badgeText, "");
-        } else {
-            text = text ? `${text} - ${badgeText}` : badgeText;
-        }
-    }
-    
-    return text.split(/\s*-\s*/)
-               .map(s => s.trim())
-               .filter(Boolean)
-               .join(" - ");
-}
 
-function applyExtraQuickComment(index, val) {
-    if (currentExtraGarmentsList[index]) {
-        let currentVal = (currentExtraGarmentsList[index].comment || "").trim();
-        let newVal = toggleCommentBadge(currentVal, val);
-        
-        currentExtraGarmentsList[index].comment = newVal;
-        const input = document.getElementById(`comment-extra-${index}`);
-        if (input) {
-            input.value = newVal;
-        }
-    }
-}
 
 function adjustExtraGarmentCount(index, dir) {
     if (currentExtraGarmentsList[index]) {
@@ -1981,21 +1917,7 @@ function updateItemComment(orderId, itemType, commentValue) {
     currentCollectedItemsCommentsMap[key] = commentValue;
 }
 
-function applyQuickComment(orderId, itemType, commentValue) {
-    const key = `${orderId}_${itemType}`;
-    if (!currentCollectedItemsCommentsMap) {
-        currentCollectedItemsCommentsMap = {};
-    }
-    
-    let currentVal = (currentCollectedItemsCommentsMap[key] || "").trim();
-    let newVal = toggleCommentBadge(currentVal, commentValue);
-    
-    currentCollectedItemsCommentsMap[key] = newVal;
-    const input = document.getElementById(`comment-${orderId}-${itemType}`);
-    if (input) {
-        input.value = newVal;
-    }
-}
+
 
 // Lightbox para agrandar imágenes
 function openLightbox(src) {
