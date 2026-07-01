@@ -316,6 +316,15 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
             appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN items_comments TEXT`, (err) => {
                 // Silenciar error si la columna ya existe
             });
+            appDb.run(`CREATE TABLE IF NOT EXISTS client_facade (
+                client_phone TEXT PRIMARY KEY,
+                client_name TEXT,
+                address TEXT,
+                facade_photo TEXT,
+                latitude REAL,
+                longitude REAL,
+                updated_at INTEGER
+            )`);
             
             appDb.run(`CREATE TABLE IF NOT EXISTS shift_state (
                 id TEXT PRIMARY KEY,
@@ -620,7 +629,28 @@ function getMergedDeliveries() {
                         }
                     ];
                     
-                    resolve(merged.concat(mockTomorrowDeliveries));
+                    appDb.all(`SELECT * FROM client_facade`, [], (err, facadeRows) => {
+                        if (err) {
+                            console.error("❌ Error fetching client_facade:", err.message);
+                        }
+                        const facadeMap = {};
+                        if (facadeRows) {
+                            facadeRows.forEach(row => {
+                                facadeMap[row.client_phone] = row;
+                            });
+                        }
+                        
+                        const allDeliveries = merged.concat(mockTomorrowDeliveries);
+                        allDeliveries.forEach(d => {
+                            const phone = d.client_phone ? d.client_phone.replace(/\D/g, '') : '';
+                            const facade = facadeMap[phone] || {};
+                            d.facade_photo = facade.facade_photo || null;
+                            d.facade_latitude = facade.latitude || null;
+                            d.facade_longitude = facade.longitude || null;
+                        });
+                        
+                        resolve(allDeliveries);
+                    });
                 });
             });
         });
@@ -866,7 +896,37 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     if (err) {
                         console.error(`❌ Error guardando metadatos en domiciliaria.db para ${clientD.id}:`, err.message);
                     }
-                    resolve();
+                    
+                    // Guardar información de fachada si está presente
+                    if (clientD.facade_photo || (clientD.facade_latitude && clientD.facade_longitude)) {
+                        appDb.run(`
+                            INSERT INTO client_facade (
+                                client_phone, client_name, address, facade_photo, latitude, longitude, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(client_phone) DO UPDATE SET
+                                client_name = excluded.client_name,
+                                address = excluded.address,
+                                facade_photo = COALESCE(excluded.facade_photo, facade_photo),
+                                latitude = COALESCE(excluded.latitude, latitude),
+                                longitude = COALESCE(excluded.longitude, longitude),
+                                updated_at = excluded.updated_at
+                        `, [
+                            clientD.client_phone,
+                            clientD.client_name,
+                            clientD.address,
+                            clientD.facade_photo || null,
+                            clientD.facade_latitude ? parseFloat(clientD.facade_latitude) : null,
+                            clientD.facade_longitude ? parseFloat(clientD.facade_longitude) : null,
+                            nowEpoch
+                        ], (err) => {
+                            if (err) {
+                                console.error(`❌ Error guardando fachada en client_facade para ${clientD.client_phone}:`, err.message);
+                            }
+                            resolve();
+                        });
+                    } else {
+                        resolve();
+                    }
                 });
             });
         });

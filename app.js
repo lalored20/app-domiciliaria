@@ -5,12 +5,12 @@ let db = null;
 try {
     if (typeof Dexie !== 'undefined') {
         db = new Dexie("AppDomiciliariaDB");
-        db.version(5).stores({
-            deliveries: 'id, client_name, client_phone, address, localidad, time_window, amount, pay_method, status, qr_code, expected_items, collected_items, evidence_photo, signature_drawn, order_date, sync_pending, items_comments',
+        db.version(6).stores({
+            deliveries: 'id, client_name, client_phone, address, localidad, time_window, amount, pay_method, status, qr_code, expected_items, collected_items, evidence_photo, signature_drawn, order_date, sync_pending, items_comments, facade_photo, facade_latitude, facade_longitude',
             shift: 'id, driver_name, initial_cash, collected_cash, expenses, status, shift_date, sync_pending',
             pending_wa_messages: '++id, phone, message, status, timestamp, attempts'
         });
-        console.log("🔋 Dexie.js (IndexedDB local) activo (v5).");
+        console.log("🔋 Dexie.js (IndexedDB local) activo (v6).");
     }
 } catch (e) {
     console.warn("⚠️ Falló Dexie. Usando LocalStorage fallback.", e);
@@ -1936,6 +1936,97 @@ function closeLightbox() {
     }
 }
 
+// Registro de Fachada y Coordenadas GPS
+let activeFacadeOrderId = null;
+
+function captureFacadeAndGPS(orderId) {
+    const d = deliveries.find(item => item.id === orderId);
+    if (!d) return;
+    
+    // Abrir input de cámara
+    const cameraInput = document.getElementById("facade-camera-input");
+    if (cameraInput) {
+        activeFacadeOrderId = orderId;
+        cameraInput.click();
+    }
+}
+
+function handleFacadePhoto(event) {
+    const file = event.target.files[0];
+    if (!file || !activeFacadeOrderId) return;
+    
+    const d = deliveries.find(item => item.id === activeFacadeOrderId);
+    if (!d) return;
+    
+    addSystemLog("⏳ Procesando foto de fachada y obteniendo GPS...");
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const base64 = e.target.result;
+        
+        // Obtener coordenadas en tiempo real
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    await saveFacadeData(d.client_phone, base64, lat, lng);
+                    addSystemLog("🏡 Fachada y coordenadas GPS guardadas.");
+                },
+                async (error) => {
+                    console.warn("⚠️ Geolocalización denegada o no disponible:", error);
+                    await saveFacadeData(d.client_phone, base64, null, null);
+                    addSystemLog("🏡 Fachada guardada (GPS no disponible).");
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        } else {
+            saveFacadeData(d.client_phone, base64, null, null);
+            addSystemLog("🏡 Fachada guardada (GPS no soportado).");
+        }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+}
+
+async function saveFacadeData(clientPhone, photoBase64, lat, lng) {
+    // 1. Actualizar en memoria local
+    deliveries.forEach(item => {
+        if (item.client_phone === clientPhone) {
+            if (photoBase64) item.facade_photo = photoBase64;
+            if (lat) item.facade_latitude = lat;
+            if (lng) item.facade_longitude = lng;
+            item.sync_pending = true;
+        }
+    });
+    
+    // 2. Guardar en IndexedDB
+    if (db) {
+        const localItems = await db.deliveries.where('client_phone').equals(clientPhone).toArray();
+        for (const item of localItems) {
+            if (photoBase64) item.facade_photo = photoBase64;
+            if (lat) item.facade_latitude = lat;
+            if (lng) item.facade_longitude = lng;
+            item.sync_pending = true;
+            await db.deliveries.put(item);
+        }
+    }
+    
+    // 3. Sincronizar inmediatamente
+    syncData();
+    
+    // 4. Refrescar modal de detalles
+    if (activeFacadeOrderId) {
+        openChatTranscriptionModal(activeFacadeOrderId);
+    }
+}
+
+function openGpsMaps(lat, lng) {
+    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    window.open(url, "_blank");
+}
+
 // Abrir modal
 function openConfirmModal(id) {
     currentActiveDeliveryId = id;
@@ -2224,6 +2315,40 @@ function openChatTranscriptionModal(id) {
     document.getElementById('chat-modal-client-name').textContent = d.client_name;
     document.getElementById('chat-modal-phone').textContent = `Celular: +${d.client_phone}`;
 
+    // Fachada y GPS
+    let facadeHtml = "";
+    const hasFacadePhoto = d.facade_photo && d.facade_photo.trim() !== "";
+    const hasFacadeGps = d.facade_latitude && d.facade_longitude;
+    
+    if (hasFacadePhoto || hasFacadeGps) {
+        facadeHtml = `
+            <div style="margin-top: 8px; padding: 10px; background: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 8px; font-size: 11px;">
+                <div style="font-weight: 700; color: #10b981; margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">
+                    🏡 FACHADA Y UBICACIÓN GUARDADA
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    ${hasFacadePhoto ? `
+                        <img src="${d.facade_photo}" onclick="openLightbox('${d.facade_photo}')" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3); cursor: zoom-in;" title="Ampliar fachada">
+                    ` : ''}
+                    <div style="flex: 1;">
+                        ${hasFacadeGps ? `
+                            <div><strong>Coordenadas GPS:</strong> ${d.facade_latitude.toFixed(6)}, ${d.facade_longitude.toFixed(6)}</div>
+                            <button class="btn" onclick="openGpsMaps(${d.facade_latitude}, ${d.facade_longitude})" style="margin-top: 4px; padding: 2px 6px; font-size: 10px; height: auto; background: #10b981; border-color: #10b981; color: white; display: inline-flex; align-items: center; gap: 3px; line-height: 1.2;">
+                                🗺️ Navegar a Fachada
+                            </button>
+                        ` : '<div style="color: var(--text-muted); font-style: italic;">Sin coordenadas GPS guardadas.</div>'}
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        facadeHtml = `
+            <div style="margin-top: 8px; padding: 8px; background: rgba(255, 255, 255, 0.01); border: 1px dashed var(--border); border-radius: 8px; font-size: 11px; text-align: center; color: var(--text-muted);">
+                Sin foto de fachada ni coordenadas GPS de la casa.
+            </div>
+        `;
+    }
+
     // 8. Caja de Resumen Integrado (Pulido, sin tanto texto, súper ordenado)
     const summaryBoxHtml = `
         <div class="summary-route-box" style="padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: var(--text-main); line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
@@ -2234,6 +2359,14 @@ function openChatTranscriptionModal(id) {
                 <div><strong>Dirección de entrega:</strong> ${formatShortAddress(d.address)}</div>
                 <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"><strong>Original escrita:</strong> "${escapeHtml(d.raw_address || d.address)}"</div>
                 ${routingHtml}
+                
+                ${facadeHtml}
+                
+                <div style="text-align: right; margin-top: 6px;">
+                    <button class="btn" onclick="captureFacadeAndGPS('${d.id}')" style="padding: 3px 8px; font-size: 10px; height: 22px; background: rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.2); color: var(--primary); display: inline-flex; align-items: center; gap: 3px; font-weight: bold; cursor: pointer;">
+                        📷 Registrar Fachada & GPS
+                    </button>
+                </div>
             </div>
 
             <!-- Sección: Prendas y Servicios -->
@@ -2652,7 +2785,10 @@ async function runBackgroundSync() {
                                     localItem.address !== serverD.address ||
                                     localItem.localidad !== serverD.localidad ||
                                     localItem.items_comments !== serverD.items_comments ||
-                                    localItem.collected_items !== serverD.collected_items
+                                    localItem.collected_items !== serverD.collected_items ||
+                                    localItem.facade_photo !== serverD.facade_photo ||
+                                    localItem.facade_latitude !== serverD.facade_latitude ||
+                                    localItem.facade_longitude !== serverD.facade_longitude
                                 ) {
                                     localItem.client_phone = serverD.client_phone;
                                     localItem.latitude = serverD.latitude;
@@ -2661,6 +2797,9 @@ async function runBackgroundSync() {
                                     localItem.localidad = serverD.localidad;
                                     localItem.items_comments = serverD.items_comments;
                                     localItem.collected_items = serverD.collected_items;
+                                    localItem.facade_photo = serverD.facade_photo;
+                                    localItem.facade_latitude = serverD.facade_latitude;
+                                    localItem.facade_longitude = serverD.facade_longitude;
                                     localChanged = true;
                                 }
                                 if (localChanged) {

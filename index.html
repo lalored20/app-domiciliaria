@@ -17,7 +17,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.18">
+    <link rel="stylesheet" href="styles.css?v=1.0.19">
 </head>
 <body class="theme-dark">
 
@@ -103,6 +103,7 @@
                         <!-- Se inyecta dinámicamente desde JS -->
                     </div>
                     <input type="file" accept="image/*" capture="environment" id="camera-input" style="display: none;" onchange="handleCameraFile(event)">
+                    <input type="file" accept="image/*" capture="environment" id="facade-camera-input" style="display: none;" onchange="handleFacadePhoto(event)">
                 </div>
 
                 <!-- Control Manual de Prendas -->
@@ -191,7 +192,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.18"></script>
+    <script src="app.js?v=1.0.19"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {
