@@ -61,9 +61,33 @@ let currentCollectedItemsCount = 1;
 let currentCollectedItemsCommentsMap = {};
 
 function getTodayDateString() {
-    const options = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
-    const formatter = new Intl.DateTimeFormat('fr-CA', options); // 'fr-CA' outputs YYYY-MM-DD
-    return formatter.format(new Date());
+    try {
+        const options = { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const formatter = new Intl.DateTimeFormat('fr-CA', options); // 'fr-CA' outputs YYYY-MM-DD
+        const formatted = formatter.format(new Date());
+        if (/^\d{4}-\d{2}-\d{2}$/.test(formatted)) {
+            return formatted;
+        }
+    } catch (e) {
+        console.warn("Intl.DateTimeFormat America/Bogota failed, falling back to manual offset math:", e);
+    }
+    
+    try {
+        const now = new Date();
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        // Bogotá es UTC-5
+        const bogotaDate = new Date(utc + (3600000 * -5));
+        const yyyy = bogotaDate.getFullYear();
+        const mm = String(bogotaDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(bogotaDate.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    } catch (err) {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
 }
 
 const todayDateStr = getTodayDateString();
@@ -125,12 +149,17 @@ async function initApp() {
         try {
             // Cargar entregas reales guardadas en IndexedDB
             deliveries = await db.deliveries.toArray();
+            if (Array.isArray(deliveries)) {
+                deliveries = deliveries.filter(item => item && typeof item === 'object');
+            } else {
+                deliveries = [];
+            }
 
             // Saneamiento de coordenadas de fallback residuales locales
             const fallbackLats = [4.7011, 4.7250, 4.6675, 4.6432, 4.6669, 4.7012, 4.6738, 4.6307, 4.6186, 4.6205, 4.4600, 4.5300, 4.5600];
             let needsReload = false;
             for (const d of deliveries) {
-                if (d.latitude && fallbackLats.some(f => Math.abs(f - d.latitude) < 0.001)) {
+                if (d && d.latitude && fallbackLats.some(f => Math.abs(f - d.latitude) < 0.001)) {
                     d.latitude = null;
                     d.longitude = null;
                     d.sync_pending = false; // Evitar subir el null erróneamente al servidor
