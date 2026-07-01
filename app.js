@@ -1865,19 +1865,45 @@ function updateExtraGarmentComment(index, val) {
     }
 }
 
+function toggleCommentBadge(currentVal, badgeText) {
+    let text = currentVal || "";
+    const tags = [
+        "✅ Sin novedad",
+        "⚠️ Rota / Rasgada",
+        "❌ Faltante",
+        "📝 Incoherencia en tipo"
+    ];
+    
+    if (badgeText === "✅ Sin novedad") {
+        if (text.includes("✅ Sin novedad")) {
+            text = text.replace("✅ Sin novedad", "");
+        } else {
+            tags.forEach(t => {
+                if (t !== "✅ Sin novedad") {
+                    text = text.replace(t, "");
+                }
+            });
+            text = text ? `${text} - ✅ Sin novedad` : "✅ Sin novedad";
+        }
+    } else {
+        text = text.replace("✅ Sin novedad", "");
+        if (text.includes(badgeText)) {
+            text = text.replace(badgeText, "");
+        } else {
+            text = text ? `${text} - ${badgeText}` : badgeText;
+        }
+    }
+    
+    return text.split(/\s*-\s*/)
+               .map(s => s.trim())
+               .filter(Boolean)
+               .join(" - ");
+}
+
 function applyExtraQuickComment(index, val) {
     if (currentExtraGarmentsList[index]) {
         let currentVal = (currentExtraGarmentsList[index].comment || "").trim();
-        let newVal = val;
-        
-        if (currentVal) {
-            // Si ya contiene el mismo tag rápido, no lo duplicamos
-            if (!currentVal.includes(val)) {
-                newVal = `${currentVal} - ${val}`;
-            } else {
-                newVal = currentVal;
-            }
-        }
+        let newVal = toggleCommentBadge(currentVal, val);
         
         currentExtraGarmentsList[index].comment = newVal;
         const input = document.getElementById(`comment-extra-${index}`);
@@ -1962,16 +1988,7 @@ function applyQuickComment(orderId, itemType, commentValue) {
     }
     
     let currentVal = (currentCollectedItemsCommentsMap[key] || "").trim();
-    let newVal = commentValue;
-    
-    if (currentVal) {
-        // Evitar duplicar la misma opción rápida
-        if (!currentVal.includes(commentValue)) {
-            newVal = `${currentVal} - ${commentValue}`;
-        } else {
-            newVal = currentVal;
-        }
-    }
+    let newVal = toggleCommentBadge(currentVal, commentValue);
     
     currentCollectedItemsCommentsMap[key] = newVal;
     const input = document.getElementById(`comment-${orderId}-${itemType}`);
