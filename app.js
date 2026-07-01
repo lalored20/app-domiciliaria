@@ -2104,6 +2104,11 @@ async function deleteFacadePhoto(orderId, index) {
             await promiseWithTimeout(db.deliveries.put(item), 1500, "Dexie facade delete put timeout");
         }
     } else {
+        if (newVal) {
+            localStorage.setItem("photo_facade_" + d.client_phone, newVal);
+        } else {
+            localStorage.removeItem("photo_facade_" + d.client_phone);
+        }
         await saveDeliveries();
     }
     
@@ -2323,6 +2328,9 @@ async function saveFacadeData(clientPhone, photoBase64, lat, lng) {
             await promiseWithTimeout(db.deliveries.put(item), 1500, "Dexie facade save put timeout");
         }
     } else {
+        if (photoBase64) {
+            localStorage.setItem("photo_facade_" + clientPhone, photoBase64);
+        }
         await saveDeliveries();
     }
     
