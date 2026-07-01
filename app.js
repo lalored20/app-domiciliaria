@@ -192,12 +192,7 @@ async function initApp() {
     renderLocalidades();
     renderCalendarStrip();
     
-    // Auto-optimizar la ruta inicial de forma silenciosa al arrancar
-    if (deliveries.length > 0) {
-        await optimizeRouteByProximity(currentLocalidad, true);
-    } else {
-        renderContent();
-    }
+    renderContent();
 
     initSwipeNavigation();
 
