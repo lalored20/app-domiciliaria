@@ -66,14 +66,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- CDN de Dexie.js para Base de Datos IndexedDB Local y Offline -->
-    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    <!-- Dexie.js LOCAL (v4.0.11) para IndexedDB - No depende de CDN externo -->
+    <script src="dexie.min.js"></script>
     
-    <!-- SDK de Supabase para comunicación en tiempo real y persistencia en la nube -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Supabase SDK LOCAL - No depende de CDN externo -->
+    <script src="supabase.min.js"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.37">
+    <link rel="stylesheet" href="styles.css?v=1.0.38">
 </head>
 <body class="theme-dark">
 
@@ -264,7 +264,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.37"></script>
+    <script src="app.js?v=1.0.38"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {
