@@ -14,12 +14,17 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Servir archivos estáticos del Frontend (index.html, app.js, styles.css) con Cache-Control deshabilitado para desarrollo
-app.use((req, res, next) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    next();
-});
-app.use(express.static(path.join(__dirname)));
+// Servir archivos estáticos del Frontend (index.html, app.js, styles.css) desactivando la caché en el servidor
+app.use(express.static(path.join(__dirname), {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res, path) => {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('Surrogate-Control', 'no-store');
+    }
+}));
 
 // Configuración de Supabase opcional
 const supabaseUrl = process.env.SUPABASE_URL || '';
