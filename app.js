@@ -257,6 +257,16 @@ function loadLocalStorageFallback() {
     if (!Array.isArray(deliveries)) {
         deliveries = [];
         localStorage.setItem("deliveries", JSON.stringify([]));
+    } else {
+        deliveries.forEach(d => {
+            if (d) {
+                const storedFacade = localStorage.getItem("photo_facade_" + d.client_phone);
+                if (storedFacade) d.facade_photo = storedFacade;
+                
+                const storedEvidence = localStorage.getItem("photo_evidence_" + d.id);
+                if (storedEvidence) d.evidence_photo = storedEvidence;
+            }
+        });
     }
 
     const cachedShift = localStorage.getItem("shift");
@@ -2236,12 +2246,20 @@ function handleFacadePhoto(event) {
         // Obtener GPS antes de guardar para envío atómico
         if (navigator.geolocation) {
             try {
-                const position = await new Promise((resolve, reject) => {
+                // Timeout por software para evitar cuelgues del API de Chrome en Windows
+                const gpsPromise = new Promise((resolve, reject) => {
                     navigator.geolocation.getCurrentPosition(resolve, reject, { 
                         enableHighAccuracy: true, 
-                        timeout: 2500 
+                        timeout: 2000 
                     });
                 });
+                
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error("Timeout de geolocalización por software")), 2200);
+                });
+                
+                const position = await Promise.race([gpsPromise, timeoutPromise]);
+                
                 lat = position.coords.latitude;
                 lng = position.coords.longitude;
                 addSystemLog(`📡 Coordenadas GPS obtenidas: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
@@ -3180,7 +3198,8 @@ async function runBackgroundSync() {
                     }
                     
                     if (isUsingLocalStorage) {
-                        localStorage.setItem("deliveries", JSON.stringify(localD));
+                        deliveries = localD;
+                        await saveDeliveries();
                     }
                     
                     if (updatedCount > 0 || isUsingLocalStorage) {
@@ -3313,7 +3332,25 @@ async function saveDeliveries() {
             await promiseWithTimeout(db.deliveries.put(d), 1500, "Dexie saveDeliveries put timeout");
         }
     } else {
-        localStorage.setItem("deliveries", JSON.stringify(deliveries));
+        const cleanDeliveries = deliveries.map(d => {
+            if (d.facade_photo) {
+                localStorage.setItem("photo_facade_" + d.client_phone, d.facade_photo);
+            }
+            if (d.evidence_photo) {
+                localStorage.setItem("photo_evidence_" + d.id, d.evidence_photo);
+            }
+            return {
+                ...d,
+                facade_photo: null,
+                evidence_photo: null
+            };
+        });
+        
+        try {
+            localStorage.setItem("deliveries", JSON.stringify(cleanDeliveries));
+        } catch (e) {
+            console.error("Fallo al escribir deliveries en LocalStorage:", e);
+        }
     }
 }
 
