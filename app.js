@@ -2031,7 +2031,7 @@ function captureRealtimeGps(event, orderId) {
         statusEl.innerHTML = `
             <span style="color: var(--primary); font-weight: 700; display: flex; align-items: center; gap: 6px;">
                 <span class="pulse-radar" style="display: inline-block; width: 10px; height: 10px; background: var(--primary); border-radius: 50%;"></span>
-                Obteniendo ubicación satelital en tiempo real...
+                Obteniendo ubicación satelital (Alta Precisión)...
             </span>
         `;
     }
@@ -2041,21 +2041,82 @@ function captureRealtimeGps(event, orderId) {
             async (position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
-                
                 await saveFacadeData(d.client_phone, null, lat, lng);
-                addSystemLog("📡 Ubicación GPS obtenida e inscrita.");
+                addSystemLog("📡 Ubicación GPS (Alta Precisión) obtenida.");
             },
             (error) => {
-                console.warn("⚠️ Geolocalización fallida:", error);
+                console.warn("⚠️ Geolocalización con alta precisión fallida. Reintentando con baja precisión...", error);
                 if (statusEl) {
-                    statusEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">❌ Error al obtener GPS: ${error.message}</span>`;
+                    statusEl.innerHTML = `
+                        <span style="color: var(--warning); font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                            <span class="pulse-radar" style="display: inline-block; width: 10px; height: 10px; background: var(--warning); border-radius: 50%;"></span>
+                            Buscando por red/celdas (Baja Precisión)...
+                        </span>
+                    `;
                 }
+                
+                navigator.geolocation.getCurrentPosition(
+                    async (position2) => {
+                        const lat = position2.coords.latitude;
+                        const lng = position2.coords.longitude;
+                        await saveFacadeData(d.client_phone, null, lat, lng);
+                        addSystemLog("📡 Ubicación GPS (Baja Precisión) obtenida.");
+                    },
+                    (error2) => {
+                        console.warn("❌ Geolocalización fallida completamente:", error2);
+                        if (statusEl) {
+                            statusEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">❌ Error al obtener GPS: ${error2.message}</span>`;
+                        }
+                    },
+                    { enableHighAccuracy: false, timeout: 5000 }
+                );
             },
-            { enableHighAccuracy: true, timeout: 8000 }
+            { enableHighAccuracy: true, timeout: 4000 }
         );
     } else {
         if (statusEl) {
-            statusEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">❌ Geolocalización no soportada.</span>`;
+            statusEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">❌ Geolocalización no soportada en el navegador.</span>`;
+        }
+    }
+}
+
+async function geocodeClientAddress(event, orderId) {
+    if (event) event.stopPropagation();
+    
+    const d = deliveries.find(item => item.id === orderId);
+    if (!d) return;
+    
+    const statusEl = document.getElementById("facade-gps-status");
+    if (statusEl) {
+        statusEl.innerHTML = `
+            <span style="color: var(--primary); font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                <span class="pulse-radar" style="display: inline-block; width: 10px; height: 10px; background: var(--primary); border-radius: 50%;"></span>
+                Resolviendo dirección en el servidor...
+            </span>
+        `;
+    }
+    
+    try {
+        const res = await fetch(`/api/geocode?address=${encodeURIComponent(d.address)}`);
+        if (res.ok) {
+            const result = await res.json();
+            if (result.success) {
+                await saveFacadeData(d.client_phone, null, result.latitude, result.longitude);
+                addSystemLog("📡 Dirección resuelta a coordenadas con éxito.");
+            } else {
+                if (statusEl) {
+                    statusEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">❌ No se pudo resolver la dirección.</span>`;
+                }
+            }
+        } else {
+            if (statusEl) {
+                statusEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">❌ Error del servidor de geolocalización.</span>`;
+            }
+        }
+    } catch (e) {
+        console.error(e);
+        if (statusEl) {
+            statusEl.innerHTML = `<span style="color: var(--danger); font-weight: 700;">❌ Error de conexión al servidor.</span>`;
         }
     }
 }
@@ -2206,13 +2267,18 @@ function openFacadeModal(event, orderId) {
                     ${hasGps ? `📌 Coordenadas guardadas:<br/><strong style="color:var(--text-main); font-size:12px;">${d.facade_latitude.toFixed(6)}, ${d.facade_longitude.toFixed(6)}</strong>` : '❌ Sin coordenadas GPS de fachada registradas para este cliente.'}
                 </div>
                 
-                <div style="display: flex; gap: 8px; width: 100%; box-sizing: border-box;">
-                    <button class="btn" onclick="captureRealtimeGps(event, '${d.id}')" style="flex: 1; background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); color: #10b981; padding: 8px; font-size: 11px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: bold; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(16, 185, 129, 0.15)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.08)'">
-                        📍 Capturar GPS Actual
-                    </button>
+                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; box-sizing: border-box;">
+                    <div style="display: flex; gap: 8px; width: 100%;">
+                        <button class="btn" onclick="captureRealtimeGps(event, '${d.id}')" style="flex: 1; background: rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.3); color: var(--primary); padding: 8px; font-size: 11px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: bold; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(139, 92, 246, 0.15)'" onmouseout="this.style.background='rgba(139, 92, 246, 0.08)'">
+                            🛰️ Satélite (Móvil)
+                        </button>
+                        <button class="btn" onclick="geocodeClientAddress(event, '${d.id}')" style="flex: 1; background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.3); color: #10b981; padding: 8px; font-size: 11px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: bold; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(16, 185, 129, 0.15)'" onmouseout="this.style.background='rgba(16, 185, 129, 0.08)'">
+                            🌐 Por Dirección
+                        </button>
+                    </div>
                     ${hasGps ? `
-                        <button class="btn" onclick="openGpsMaps(${d.facade_latitude}, ${d.facade_longitude})" style="flex: 1; background: #10b981; border-color: #10b981; color: white; padding: 8px; font-size: 11px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: bold; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
-                            🗺️ Iniciar Maps
+                        <button class="btn" onclick="openGpsMaps(${d.facade_latitude}, ${d.facade_longitude})" style="width: 100%; background: #10b981; border-color: #10b981; color: white; padding: 8px; font-size: 11px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: bold; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                            🗺️ Abrir en Google Maps
                         </button>
                     ` : ''}
                 </div>

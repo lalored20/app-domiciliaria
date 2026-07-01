@@ -972,6 +972,25 @@ app.post('/api/shift/sync', (req, res) => {
     });
 });
 
+// Resolver dirección a coordenadas GPS
+app.get('/api/geocode', async (req, res) => {
+    const address = req.query.address;
+    if (!address) {
+        return res.status(400).json({ success: false, error: "Falta la dirección" });
+    }
+    try {
+        const coords = await geocodeAddress(address);
+        if (coords) {
+            res.json({ success: true, latitude: coords.lat, longitude: coords.lon, localidad: coords.localidad });
+        } else {
+            res.status(404).json({ success: false, error: "No se pudieron obtener las coordenadas para esta dirección" });
+        }
+    } catch (err) {
+        console.error("❌ Error en geocodeAddress API:", err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Obtener Shift/Turno
 app.get('/api/shift', (req, res) => {
     appDb.get(`SELECT * FROM shift_state ORDER BY updated_at DESC LIMIT 1`, [], (err, row) => {
