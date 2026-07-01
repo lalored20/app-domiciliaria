@@ -4,54 +4,28 @@
     <meta charset="UTF-8">
     <script>
         (function() {
-            var isReporting = false;
-            function sendLog(type, msg, stack) {
-                if (isReporting) return;
-                isReporting = true;
-                fetch('/api/log-error', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        error: "[" + type + "] " + String(msg),
-                        url: window.location.href,
-                        line: 0,
-                        col: 0,
-                        stack: stack || ''
-                    })
-                }).catch(function() {})
-                  .finally(function() { isReporting = false; });
+            var errorCount = 0;
+            var MAX_ERRORS = 5;
+            function sendLog(type, msg) {
+                if (errorCount >= MAX_ERRORS) return;
+                errorCount++;
+                try {
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', '/api/log-error', true);
+                    xhr.setRequestHeader('Content-Type', 'application/json');
+                    xhr.send(JSON.stringify({
+                        error: '[' + type + '] ' + String(msg).substring(0, 500),
+                        url: location.href, line: 0, col: 0, stack: ''
+                    }));
+                } catch(e) {}
             }
-
-            // Capturar excepciones no controladas
-            window.onerror = function(message, source, lineno, colno, error) {
-                sendLog("ERROR", message + " (" + source + ":" + lineno + ":" + colno + ")", error ? error.stack : '');
+            window.onerror = function(m, s, l, c) {
+                sendLog('ERROR', m + ' (' + s + ':' + l + ')');
                 return false;
             };
-
-            // Capturar promesas rechazadas no controladas
-            window.onunhandledrejection = function(event) {
-                var reason = event.reason;
-                var msg = reason ? (reason.message || reason) : 'Unhandled promise rejection';
-                var stack = reason && reason.stack ? reason.stack : '';
-                sendLog("UNHANDLED_REJECTION", msg, stack);
-            };
-
-            // Interceptar console.error y console.warn
-            var origError = console.error;
-            console.error = function() {
-                var args = Array.prototype.slice.call(arguments);
-                origError.apply(console, args);
-                sendLog("CONSOLE_ERROR", args.join(' '));
-            };
-
-            var origWarn = console.warn;
-            console.warn = function() {
-                var args = Array.prototype.slice.call(arguments);
-                origWarn.apply(console, args);
-                var logStr = args.join(' ');
-                if (logStr.indexOf('[Geocoder]') === -1 && logStr.indexOf('Dexie') === -1) {
-                    sendLog("CONSOLE_WARN", logStr);
-                }
+            window.onunhandledrejection = function(e) {
+                var r = e.reason;
+                sendLog('REJECTION', r ? (r.message || String(r)) : 'unknown');
             };
         })();
     </script>
@@ -66,14 +40,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Dexie.js LOCAL (v4.0.11) para IndexedDB - No depende de CDN externo -->
-    <script src="dexie.min.js"></script>
+    <!-- Dexie DESACTIVADO - La app usa LocalStorage + Express Server -->
+    <!-- <script src="dexie.min.js"></script> -->
     
     <!-- Supabase SDK LOCAL - No depende de CDN externo -->
     <script src="supabase.min.js"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.38">
+    <link rel="stylesheet" href="styles.css?v=1.0.39">
 </head>
 <body class="theme-dark">
 
@@ -264,7 +238,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.38"></script>
+    <script src="app.js?v=1.0.39"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {

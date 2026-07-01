@@ -1,20 +1,16 @@
 /* SYSTEMA ANTIGRAVITY v4.5: MOTOR DE LÓGICA DE NEGOCIO (FULL MIGRADO, AUTOCORREGIDO E INTERACTIVO) */
 
-// 1. Configuración de Base de Datos Local con Dexie.js (Offline Cache)
+// 1. IndexedDB/Dexie DESACTIVADO - La app funciona 100% con LocalStorage + Express Server
+// Razón: IndexedDB se congela indefinidamente en Chrome normal (no incógnito) para localhost,
+// causando crash del navegador. LocalStorage + sync con servidor es suficiente y estable.
 let db = null;
+
+// Limpiar cualquier IndexedDB corrupta residual al cargar
 try {
-    if (typeof Dexie !== 'undefined') {
-        db = new Dexie("AppDomiciliariaDB");
-        db.version(6).stores({
-            deliveries: 'id, client_name, client_phone, address, localidad, time_window, amount, pay_method, status, qr_code, expected_items, collected_items, evidence_photo, signature_drawn, order_date, sync_pending, items_comments, facade_photo, facade_latitude, facade_longitude',
-            shift: 'id, driver_name, initial_cash, collected_cash, expenses, status, shift_date, sync_pending',
-            pending_wa_messages: '++id, phone, message, status, timestamp, attempts'
-        });
-        console.log("🔋 Dexie.js (IndexedDB local) activo (v6).");
+    if (typeof indexedDB !== 'undefined' && indexedDB.deleteDatabase) {
+        indexedDB.deleteDatabase("AppDomiciliariaDB");
     }
-} catch (e) {
-    console.warn("⚠️ Falló Dexie. Usando LocalStorage fallback.", e);
-}
+} catch(e) {}
 
 // Datos de prueba iniciales
 const DEFAULT_DELIVERIES = [];
