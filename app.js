@@ -1928,7 +1928,7 @@ function renderGarmentsVerificationTable() {
                         <span>${escapeHtml(extra.type)}</span>
                         <span onclick="removeExtraGarment(${index})" style="color:#ef4444; font-size:10px; cursor:pointer; font-weight:bold; margin-left:6px;">[Quitar]</span>
                     </div>
-                    <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Añadida manualmente</div>
+                    <div style="font-size:10px; color:var(--text-muted); font-style:italic; margin-bottom:6px;">Añadida manualmente ${extra.price > 0 ? `• Precio unitario: $${(extra.price).toLocaleString()}` : ''}</div>
                     
                     <div style="margin-top:4px;">
                         <input type="text" id="comment-extra-${index}" placeholder="Reportar detalle/novedad..." value="${escapeHtml(extra.comment)}" oninput="updateExtraGarmentComment(${index}, this.value)" style="width:100%; padding:6px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-main); outline:none;">
@@ -1954,6 +1954,7 @@ function renderGarmentsVerificationTable() {
     if (tableDiv) tableDiv.innerHTML = tableHtml;
     
     updateGroupedItemsSummary();
+    updateModalAmountSummary();
 }
 
 function updateExtraGarmentComment(index, val) {
@@ -1994,17 +1995,39 @@ function hideAddExtraGarmentForm() {
         form.style.display = "none";
         document.getElementById("extra-garment-name").value = "";
         document.getElementById("extra-garment-qty").value = "1";
+        document.getElementById("extra-garment-price").value = "";
         document.getElementById("extra-garment-comment").value = "";
+    }
+}
+
+function updateModalAmountSummary() {
+    if (!currentActiveDeliveryId) return;
+    const ids = currentActiveDeliveryId.split(',');
+    const groupItems = deliveries.filter(item => ids.includes(item.id));
+    
+    // Calcular el monto base acumulado del grupo de pedidos
+    const baseAmt = groupItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+    
+    // Calcular el monto de las prendas extras añadidas (precio * cantidad)
+    const extrasAmt = currentExtraGarmentsList.reduce((sum, extra) => sum + ((extra.price || 0) * (extra.quantity || 0)), 0);
+    
+    const totalAmt = baseAmt + extrasAmt;
+    
+    const amountEl = document.getElementById('modal-amount');
+    if (amountEl) {
+        amountEl.textContent = "$" + totalAmt.toLocaleString();
     }
 }
 
 function addExtraGarmentToVerification() {
     const nameInput = document.getElementById("extra-garment-name");
     const qtyInput = document.getElementById("extra-garment-qty");
+    const priceInput = document.getElementById("extra-garment-price");
     const commentInput = document.getElementById("extra-garment-comment");
     
     const name = nameInput.value.trim();
     const qty = parseInt(qtyInput.value) || 1;
+    const price = parseFloat(priceInput.value) || 0;
     const comment = commentInput.value.trim() || "✅ Prenda adicionada en sitio";
     
     if (!name) {
@@ -2015,11 +2038,12 @@ function addExtraGarmentToVerification() {
     currentExtraGarmentsList.push({
         type: name,
         quantity: qty,
+        price: price,
         comment: comment,
         tempId: 'extra_' + Date.now()
     });
     
-    addSystemLog(`👔 Prenda manual añadida: ${qty}x ${name}`);
+    addSystemLog(`👔 Prenda manual añadida: ${qty}x ${name} (Precio unitario: $${price.toLocaleString()})`);
     renderGarmentsVerificationTable();
     hideAddExtraGarmentForm();
 }
@@ -2862,6 +2886,13 @@ async function confirmDelivery() {
                 if (d.id === mainId && currentExtraGarmentsList.length > 0) {
                     d.collected_items += currentExtraGarmentsList.reduce((sum, extra) => sum + extra.quantity, 0);
                     orderComments["__extra_garments__"] = currentExtraGarmentsList;
+                    
+                    // Sumar el precio total de las prendas extras al monto total cobrado de la orden
+                    const extrasAmt = currentExtraGarmentsList.reduce((sum, extra) => sum + ((extra.price || 0) * (extra.quantity || 0)), 0);
+                    if (extrasAmt > 0) {
+                        d.amount = (d.amount || 0) + extrasAmt;
+                        addSystemLog(`💰 Monto del pedido incrementado por prendas extras: +$${extrasAmt.toLocaleString()}`);
+                    }
                 }
                 
                 d.items_comments = JSON.stringify(orderComments);

@@ -47,7 +47,7 @@
     <script src="supabase.min.js"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.47">
+    <link rel="stylesheet" href="styles.css?v=1.0.52">
 </head>
 <body class="theme-dark">
 
@@ -154,6 +154,7 @@
                         <div style="display: flex; gap: 6px; margin-bottom: 6px;">
                             <input type="text" id="extra-garment-name" placeholder="Nombre (ej. Vestido rojo)" style="flex: 2; padding: 6px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); outline: none;">
                             <input type="number" id="extra-garment-qty" placeholder="Cant" min="1" value="1" style="width: 55px; padding: 6px 4px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); text-align: center; outline: none;">
+                            <input type="number" id="extra-garment-price" placeholder="Precio $" min="0" style="width: 75px; padding: 6px 4px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); text-align: center; outline: none;">
                         </div>
                         <input type="text" id="extra-garment-comment" placeholder="Novedad/Especificación (ej. Llegó de más)" style="width: 100%; padding: 6px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); outline: none; margin-bottom: 6px; box-sizing: border-box;">
                         <div style="display: flex; justify-content: flex-end; gap: 6px;">
@@ -238,7 +239,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.47"></script>
+    <script src="app.js?v=1.0.52"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {
