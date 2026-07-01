@@ -991,6 +991,12 @@ app.get('/api/geocode', async (req, res) => {
     }
 });
 
+// Loguear errores del frontend en la consola del servidor
+app.post('/api/log-error', express.json(), (req, res) => {
+    console.error("🚨 [Client Error]:", req.body.error, "\n  URL:", req.body.url, "line:", req.body.line, "col:", req.body.col, "\n  Stack:", req.body.stack);
+    res.json({ success: true });
+});
+
 // Obtener Shift/Turno
 app.get('/api/shift', (req, res) => {
     appDb.get(`SELECT * FROM shift_state ORDER BY updated_at DESC LIMIT 1`, [], (err, row) => {
