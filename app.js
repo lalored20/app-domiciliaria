@@ -781,9 +781,13 @@ function createDeliveryCard(d) {
     } else {
         const confirmationDetails = document.createElement("div");
         confirmationDetails.style.cssText = "font-size:12px; color:var(--success); border-top:1px solid var(--border); padding-top:10px; margin-top:4px; display:flex; justify-content:space-between;";
+        let qrLabel = "";
+        if (d.qr_code && typeof d.qr_code === 'string') {
+            qrLabel = `<span>Prenda: ${escapeHtml(d.qr_code.split('-').pop())}</span>`;
+        }
         confirmationDetails.innerHTML = `
             <span>✅ Entregado exitosamente</span>
-            <span>Prenda: ${d.qr_code.split('-').pop()}</span>
+            ${qrLabel}
         `;
         card.appendChild(confirmationDetails);
     }
