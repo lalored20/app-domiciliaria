@@ -52,6 +52,26 @@ function addSystemLog(msg) {
     }
 }
 
+// Helper para prevenir bloqueos de IndexedDB/Dexie mediante un límite de tiempo
+function promiseWithTimeout(promise, ms, timeoutErrorMsg) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(timeoutErrorMsg || "Promise timed out"));
+        }, ms);
+        
+        promise.then(
+            (res) => {
+                clearTimeout(timer);
+                resolve(res);
+            },
+            (err) => {
+                clearTimeout(timer);
+                reject(err);
+            }
+        );
+    });
+}
+
 // Estado
 let deliveries = [];
 let currentLocalidad = "Usaquén";
@@ -117,7 +137,7 @@ async function initApp() {
     // Purgar datos ficticios residuales si existen en Dexie (IDs que empiezan por "d", "test_" o "web_")
     if (db) {
         try {
-            const keys = await db.deliveries.toCollection().primaryKeys();
+            const keys = await promiseWithTimeout(db.deliveries.toCollection().primaryKeys(), 1500, "Dexie primaryKeys timeout");
             const mockKeys = keys.filter(k => typeof k === 'string' && (/^d\d+$/.test(k) || k.startsWith('test_') || k.startsWith('web_')));
             if (mockKeys.length > 0) {
                 await db.deliveries.bulkDelete(mockKeys);
@@ -148,7 +168,7 @@ async function initApp() {
     if (db) {
         try {
             // Cargar entregas reales guardadas en IndexedDB
-            deliveries = await db.deliveries.toArray();
+            deliveries = await promiseWithTimeout(db.deliveries.toArray(), 1500, "Dexie deliveries.toArray timeout");
             if (Array.isArray(deliveries)) {
                 deliveries = deliveries.filter(item => item && typeof item === 'object');
             } else {
@@ -168,12 +188,12 @@ async function initApp() {
                 }
             }
             if (needsReload) {
-                deliveries = await db.deliveries.toArray();
+                deliveries = await promiseWithTimeout(db.deliveries.toArray(), 1500, "Dexie deliveries.toArray reload timeout");
                 addSystemLog("🧹 Limpiadas coordenadas de fallback locales en IndexedDB.");
             }
             
             // Inicializar turno si no existe o cargar
-            const storedShift = await db.shift.get("shift_today");
+            const storedShift = await promiseWithTimeout(db.shift.get("shift_today"), 1500, "Dexie shift.get timeout");
             if (storedShift && typeof storedShift === 'object') {
                 currentShift = storedShift;
                 if (!currentShift.expenses_detail) {
