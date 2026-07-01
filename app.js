@@ -1692,9 +1692,13 @@ function handleCameraFile(event) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
+        const rawBase64 = e.target.result;
+        addSystemLog("⚡ Optimizando tamaño de la foto de evidencia...");
+        const base64 = await compressImage(rawBase64, 800, 800, 0.7);
+        
         if (capturedPhotosList.length < 4) {
-            capturedPhotosList.push(e.target.result);
+            capturedPhotosList.push(base64);
             addSystemLog(`📷 Foto de evidencia ${capturedPhotosList.length} añadida.`);
             renderPhotosGallery();
         }
@@ -2216,6 +2220,38 @@ async function geocodeClientAddress(event, orderId) {
     }
 }
 
+function compressImage(base64Str, maxWidth = 800, maxHeight = 800, quality = 0.7) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = function() {
+            let width = img.width;
+            let height = img.height;
+            if (width > height) {
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+            } else {
+                if (height > maxHeight) {
+                    width = Math.round((width * maxHeight) / height);
+                    height = maxHeight;
+                }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressedBase64);
+        };
+        img.onerror = function() {
+            resolve(base64Str);
+        };
+    });
+}
+
 function handleFacadePhoto(event) {
     const file = event.target.files[0];
     if (!file || !activeFacadeOrderId) return;
@@ -2227,7 +2263,11 @@ function handleFacadePhoto(event) {
     
     const reader = new FileReader();
     reader.onload = async function(e) {
-        const base64 = e.target.result;
+        const rawBase64 = e.target.result;
+        
+        // Comprimir imagen a resolución optimizada (max 800px, 70% calidad) para no saturar LocalStorage ni red
+        addSystemLog("⚡ Optimizando tamaño de la imagen...");
+        const base64 = await compressImage(rawBase64, 800, 800, 0.7);
         
         // Obtener fotos actuales
         let list = getFacadePhotosList(d);
@@ -2238,40 +2278,26 @@ function handleFacadePhoto(event) {
         list.push(base64);
         const newVal = JSON.stringify(list);
         
-        let lat = null;
-        let lng = null;
+        // 1. Guardar de forma inmediata para respuesta visual instantánea (Demora 0ms)
+        await saveFacadeData(d.client_phone, newVal, null, null);
+        addSystemLog("🏡 Foto de fachada agregada exitosamente.");
         
-        addSystemLog("📡 Obteniendo coordenadas satelitales...");
-        
-        // Obtener GPS antes de guardar para envío atómico
+        // 2. Obtener geolocalización en segundo plano de forma asíncrona (no bloqueante)
         if (navigator.geolocation) {
-            try {
-                // Timeout por software para evitar cuelgues del API de Chrome en Windows
-                const gpsPromise = new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(resolve, reject, { 
-                        enableHighAccuracy: true, 
-                        timeout: 2000 
-                    });
-                });
-                
-                const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error("Timeout de geolocalización por software")), 2200);
-                });
-                
-                const position = await Promise.race([gpsPromise, timeoutPromise]);
-                
-                lat = position.coords.latitude;
-                lng = position.coords.longitude;
-                addSystemLog(`📡 Coordenadas GPS obtenidas: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-            } catch (gpsErr) {
-                console.warn("⚠️ No se pudo obtener ubicación para la foto:", gpsErr);
-                addSystemLog("⚠️ Geolocalización no disponible. Guardando foto sin coordenadas nuevas.");
-            }
+            addSystemLog("📡 Obteniendo coordenadas satelitales en segundo plano...");
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    await saveFacadeData(d.client_phone, null, lat, lng);
+                    addSystemLog(`📡 Coordenadas GPS actualizadas en segundo plano: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+                },
+                (gpsErr) => {
+                    console.warn("⚠️ No se pudo obtener ubicación en segundo plano:", gpsErr);
+                },
+                { enableHighAccuracy: true, timeout: 5000 }
+            );
         }
-        
-        // Guardar foto y GPS juntos de forma atómica
-        await saveFacadeData(d.client_phone, newVal, lat, lng);
-        addSystemLog("🏡 Foto de fachada y GPS registrados exitosamente.");
     };
     reader.readAsDataURL(file);
     event.target.value = "";
@@ -3153,9 +3179,9 @@ async function runBackgroundSync() {
                                 localItem.localidad !== serverD.localidad ||
                                 localItem.items_comments !== serverD.items_comments ||
                                 localItem.collected_items !== serverD.collected_items ||
-                                localItem.facade_photo !== serverD.facade_photo ||
-                                localItem.facade_latitude !== serverD.facade_latitude ||
-                                localItem.facade_longitude !== serverD.facade_longitude
+                                (serverD.facade_photo && localItem.facade_photo !== serverD.facade_photo) ||
+                                (serverD.facade_latitude && localItem.facade_latitude !== serverD.facade_latitude) ||
+                                (serverD.facade_longitude && localItem.facade_longitude !== serverD.facade_longitude)
                             )) {
                                 localItem.client_phone = serverD.client_phone;
                                 localItem.latitude = serverD.latitude;
@@ -3164,9 +3190,10 @@ async function runBackgroundSync() {
                                 localItem.localidad = serverD.localidad;
                                 localItem.items_comments = serverD.items_comments;
                                 localItem.collected_items = serverD.collected_items;
-                                localItem.facade_photo = serverD.facade_photo;
-                                localItem.facade_latitude = serverD.facade_latitude;
-                                localItem.facade_longitude = serverD.facade_longitude;
+                                
+                                if (serverD.facade_photo) localItem.facade_photo = serverD.facade_photo;
+                                if (serverD.facade_latitude) localItem.facade_latitude = serverD.facade_latitude;
+                                if (serverD.facade_longitude) localItem.facade_longitude = serverD.facade_longitude;
                                 localChanged = true;
                             }
                             if (localChanged) {
