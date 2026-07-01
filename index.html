@@ -47,7 +47,7 @@
     <script src="supabase.min.js"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.40">
+    <link rel="stylesheet" href="styles.css?v=1.0.41">
 </head>
 <body class="theme-dark">
 
@@ -89,9 +89,9 @@
             <!-- Selector de Mes y Calendario -->
             <div class="calendar-wrapper">
                 <div class="month-selector">
-                    <button class="month-btn" onclick="prevMonth()">◀</button>
+                    <button class="month-btn" onclick="prevDay()">◀</button>
                     <span class="month-label" id="calendar-month-label">Junio 2026</span>
-                    <button class="month-btn" onclick="nextMonth()">▶</button>
+                    <button class="month-btn" onclick="nextDay()">▶</button>
                 </div>
                 <div class="calendar-strip" id="calendar-strip">
                     <!-- Se llena dinámicamente -->
@@ -238,7 +238,7 @@
     </div>
 
     <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.40"></script>
+    <script src="app.js?v=1.0.41"></script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {

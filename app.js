@@ -364,22 +364,40 @@ function renderCalendarStrip() {
     }
 }
 
-function prevMonth() {
-    viewMonth--;
-    if (viewMonth < 0) {
-        viewMonth = 11;
-        viewYear--;
-    }
+function changeDay(offset) {
+    const parts = currentDate.split('-');
+    if (parts.length !== 3) return;
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const day = parseInt(parts[2]);
+    
+    const dateObj = new Date(year, month, day);
+    dateObj.setDate(dateObj.getDate() + offset);
+    
+    const newY = dateObj.getFullYear();
+    const newM = dateObj.getMonth();
+    const newD = dateObj.getDate();
+    
+    const formattedMonth = String(newM + 1).padStart(2, '0');
+    const formattedDay = String(newD).padStart(2, '0');
+    currentDate = `${newY}-${formattedMonth}-${formattedDay}`;
+    
+    viewMonth = newM;
+    viewYear = newY;
+    
+    addSystemLog(`📅 Fecha cambiada: ${currentDate}.`);
+    
     renderCalendarStrip();
+    renderLocalidades();
+    renderContent();
 }
 
-function nextMonth() {
-    viewMonth++;
-    if (viewMonth > 11) {
-        viewMonth = 0;
-        viewYear++;
-    }
-    renderCalendarStrip();
+function prevDay() {
+    changeDay(-1);
+}
+
+function nextDay() {
+    changeDay(1);
 }
 
 async function selectDate(date) {
