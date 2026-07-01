@@ -686,7 +686,7 @@ function createDeliveryCard(d) {
                                 <span style="font-size: 10px; color: var(--text-muted);">${statusIcon} ${o.status === 'EN_RUTA' ? 'En Ruta' : (o.status === 'PENDIENTE' ? 'Pendiente' : 'Entregado')}</span>
                             </div>
                             <div style="color: var(--text-main); font-size: 11px; margin-top: 2px;">${itemsDesc}</div>
-                            <div style="text-align: right; font-weight: 600; font-size: 10px; color: var(--secondary); margin-top: 1px;">$${o.amount.toLocaleString()}</div>
+                            <div style="text-align: right; font-weight: 600; font-size: 10px; color: var(--secondary); margin-top: 1px;">$${(o.amount || 0).toLocaleString()}</div>
                         </div>
                     `;
                 }).join('')}
@@ -696,7 +696,7 @@ function createDeliveryCard(d) {
         if (d.items && d.items.length > 0) {
             itemsDetailHtml = `
                 <div class="items-list-box" style="margin-top: 4px; margin-bottom: 6px; padding: 6px 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; color: var(--text-main);">
-                    ${d.items.map(item => `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span>👔 ${item.quantity}x ${item.type}</span><span style="color:var(--text-muted); font-weight:500;">$${item.price.toLocaleString()}</span></div>`).join('')}
+                    ${d.items.map(item => `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span>👔 ${item.quantity}x ${item.type}</span><span style="color:var(--text-muted); font-weight:500;">$${(item.price || 0).toLocaleString()}</span></div>`).join('')}
                 </div>
             `;
         }
@@ -738,7 +738,7 @@ function createDeliveryCard(d) {
                 <span class="pay-method">${d.pay_method}</span>
                 ${d.sync_pending ? `<span style="font-size:10px; color:var(--warning); margin-left:8px;">🔄 Pendiente Nube</span>` : ''}
             </div>
-            <div class="price-val">$${d.amount.toLocaleString()}</div>
+            <div class="price-val">$${(d.amount || 0).toLocaleString()}</div>
         </div>
     `;
 
