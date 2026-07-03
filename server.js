@@ -425,6 +425,51 @@ function detectarLocalidad(direccion, lat, lon) {
     return "Usaquén"; 
 }
 
+// Comparar si dos direcciones de texto corresponden al mismo lugar físico
+function esDireccionSimilar(addr1, addr2) {
+    if (!addr1 || !addr2) return false;
+    
+    // Normalizar a minúsculas, remover tildes y dejar palabras y números
+    const normalize = (str) => {
+        return str.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remover acentos
+            .replace(/[^a-z0-9]/g, " ")
+            .replace(/\s+/g, " ").trim();
+    };
+    
+    const n1 = normalize(addr1);
+    const n2 = normalize(addr2);
+    
+    // Si una es de recogida genérica
+    if (n1.includes("recogida whatsapp") || n2.includes("recogida whatsapp")) {
+        return true;
+    }
+    
+    // Extraer números de cada dirección
+    const getNumbers = (str) => {
+        const matches = str.match(/\b\d+\b/g);
+        return matches ? matches : [];
+    };
+    
+    const num1 = getNumbers(n1);
+    const num2 = getNumbers(n2);
+    
+    // Si tienen números de calle o carrera principales diferentes
+    if (num1.length > 0 && num2.length > 0) {
+        if (num1[0] !== num2[0]) return false;
+        if (num1.length > 1 && num2.length > 1 && num1[1] !== num2[1]) return false;
+    }
+    
+    // Si la localidad detectada de manera textual difiere
+    const loc1 = detectarLocalidad(addr1);
+    const loc2 = detectarLocalidad(addr2);
+    if (loc1 && loc2 && loc1 !== loc2) {
+        return false;
+    }
+    
+    return true;
+}
+
 
 // Helper to get merged deliveries from SQLite databases
 function getMergedDeliveries() {
@@ -486,15 +531,18 @@ function getMergedDeliveries() {
                     });
                     
                     // Construir mapa de historial por número de teléfono
-                    // Guardará los metadatos más completos (con fotos de fachada o coordenadas) de cada cliente
+                    // Guardará los metadatos más completos y la dirección asociada de cada cliente
                     const phoneHistoryMap = {};
                     chatbotOrders.forEach(o => {
                         const meta = metadataMap[o.id];
                         if (meta && (meta.evidence_photo || (meta.latitude && meta.longitude))) {
                             const phoneKey = o.clientPhone.replace(/\D/g, '');
                             const existing = phoneHistoryMap[phoneKey];
-                            if (!existing || (meta.evidence_photo && !existing.evidence_photo)) {
-                                phoneHistoryMap[phoneKey] = meta;
+                            if (!existing || (meta.evidence_photo && !existing.meta.evidence_photo)) {
+                                phoneHistoryMap[phoneKey] = {
+                                    meta: meta,
+                                    address: o.clientAddress
+                                };
                             }
                         }
                     });
@@ -502,7 +550,11 @@ function getMergedDeliveries() {
                     const merged = chatbotOrders.map(o => {
                         const meta = metadataMap[o.id] || {};
                         const phoneKey = o.clientPhone.replace(/\D/g, '');
-                        const historicalMeta = phoneHistoryMap[phoneKey] || {};
+                        const histData = phoneHistoryMap[phoneKey] || {};
+                        
+                        // Validar si la dirección de la orden actual es similar a la dirección histórica
+                        const isSimilar = histData.meta && esDireccionSimilar(o.clientAddress, histData.address);
+                        const historicalMeta = isSimilar ? histData.meta : {};
                         
                         // Convert unix epoch to YYYY-MM-DD in Colombia timezone
                         const dateStr = epochToColombiaDateString(o.created_at);
@@ -1309,27 +1361,30 @@ function startBackgroundGeocoding() {
                     });
                 };
 
-                // Intentar recuperar coordenadas e imagen de fachada históricas si existen
+                // Intentar recuperar coordenadas e imagen de fachada históricas si existen y corresponden a la misma dirección
                 if (phoneKey) {
-                    chatbotDb.all(`SELECT id FROM local_orders WHERE clientPhone LIKE ?`, [`%${phoneKey}`], (err, prevOrders) => {
+                    chatbotDb.all(`SELECT id, clientAddress FROM local_orders WHERE clientPhone LIKE ?`, [`%${phoneKey}`], (err, prevOrders) => {
                         if (err || !prevOrders || prevOrders.length <= 1) {
                             proceedWithNormalGeocoding(order);
                             return;
                         }
                         
-                        const prevIds = prevOrders.map(po => po.id).filter(id => id !== order.id);
-                        if (prevIds.length === 0) {
+                        // Filtrar órdenes previas del mismo cliente que tengan direcciones físicamente coherentes o similares
+                        const similarOrders = prevOrders.filter(po => po.id !== order.id && esDireccionSimilar(order.clientAddress, po.clientAddress));
+                        
+                        if (similarOrders.length === 0) {
                             proceedWithNormalGeocoding(order);
                             return;
                         }
                         
-                        const placeholders = prevIds.map(() => '?').join(',');
+                        const similarIds = similarOrders.map(so => so.id);
+                        const placeholders = similarIds.map(() => '?').join(',');
                         appDb.get(`
                             SELECT latitude, longitude, resolved_address, resolved_localidad, evidence_photo 
                             FROM delivery_metadata 
                             WHERE order_id IN (${placeholders}) AND latitude IS NOT NULL 
                             ORDER BY updated_at DESC LIMIT 1
-                        `, prevIds, (err, historicalMeta) => {
+                        `, similarIds, (err, historicalMeta) => {
                             if (!err && historicalMeta) {
                                 const nowEpoch = Math.floor(Date.now() / 1000);
                                 const finalDate = order.scheduledDate || getColombiaDateString();
