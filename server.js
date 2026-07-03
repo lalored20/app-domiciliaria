@@ -934,6 +934,60 @@ app.post('/api/webhook/order', async (req, res) => {
 
 // NUEVOS ENDPOINTS DE SINCRONIZACIÓN Y WHATSAPP
 
+// Obtener la capacidad y cupos disponibles de cada franja horaria para una fecha específica
+app.get('/api/deliveries/capacity', (req, res) => {
+    const queryDate = req.query.date || getColombiaDateString();
+    const limitPerSlot = parseInt(req.query.limit) || 5; // Limite por franja (por defecto 5 cupos)
+    
+    const slots = [
+        "08:00 - 10:00",
+        "10:00 - 12:00",
+        "12:00 - 14:00",
+        "14:00 - 16:00",
+        "16:00 - 18:00"
+    ];
+    
+    appDb.all(`
+        SELECT time_window, COUNT(*) as count 
+        FROM delivery_metadata 
+        WHERE delivery_date = ? 
+        GROUP BY time_window
+    `, [queryDate], (err, rows) => {
+        if (err) {
+            console.error("❌ Error al obtener capacidad de entregas:", err.message);
+            return res.status(500).json({ success: false, error: err.message });
+        }
+        
+        const counts = {};
+        if (rows) {
+            rows.forEach(r => {
+                if (r.time_window) {
+                    counts[r.time_window] = r.count;
+                }
+            });
+        }
+        
+        const slotsCapacity = {};
+        slots.forEach(slot => {
+            const scheduled = counts[slot] || 0;
+            const available = Math.max(0, limitPerSlot - scheduled);
+            slotsCapacity[slot] = {
+                scheduled: scheduled,
+                available: available,
+                status: available > 0 ? "AVAILABLE" : "FULL"
+            };
+        });
+        
+        res.json({
+            success: true,
+            date: queryDate,
+            capacity_limit_per_slot: limitPerSlot,
+            slots: slotsCapacity
+        });
+    });
+});
+
+
 // Obtener órdenes guardadas en el backend
 app.get('/api/deliveries', async (req, res) => {
     try {
