@@ -485,10 +485,35 @@ function getMergedDeliveries() {
                         metadataMap[row.order_id] = row;
                     });
                     
+                    // Construir mapa de historial por número de teléfono
+                    // Guardará los metadatos más completos (con fotos de fachada o coordenadas) de cada cliente
+                    const phoneHistoryMap = {};
+                    chatbotOrders.forEach(o => {
+                        const meta = metadataMap[o.id];
+                        if (meta && (meta.evidence_photo || (meta.latitude && meta.longitude))) {
+                            const phoneKey = o.clientPhone.replace(/\D/g, '');
+                            const existing = phoneHistoryMap[phoneKey];
+                            if (!existing || (meta.evidence_photo && !existing.evidence_photo)) {
+                                phoneHistoryMap[phoneKey] = meta;
+                            }
+                        }
+                    });
+                    
                     const merged = chatbotOrders.map(o => {
                         const meta = metadataMap[o.id] || {};
+                        const phoneKey = o.clientPhone.replace(/\D/g, '');
+                        const historicalMeta = phoneHistoryMap[phoneKey] || {};
+                        
                         // Convert unix epoch to YYYY-MM-DD in Colombia timezone
                         const dateStr = epochToColombiaDateString(o.created_at);
+                        
+                        // Heredar coordenadas, dirección resuelta e imágenes de fachada si están vacías en la orden actual
+                        const finalLatitude = meta.latitude || historicalMeta.latitude || null;
+                        const finalLongitude = meta.longitude || historicalMeta.longitude || null;
+                        const finalResolvedAddress = meta.resolved_address || historicalMeta.resolved_address || o.clientAddress;
+                        const finalResolvedLocalidad = meta.resolved_localidad || historicalMeta.resolved_localidad || detectarLocalidad(finalResolvedAddress, finalLatitude, finalLongitude);
+                        const finalEvidencePhoto = meta.evidence_photo || historicalMeta.evidence_photo || null;
+                        
                         const expectedItems = meta.expected_items !== undefined ? meta.expected_items : (o.items_count || 1);
                         
                         return {
@@ -496,10 +521,10 @@ function getMergedDeliveries() {
                             chatbot_order_id: o.id,
                             ticket_number: o.ticketNumber,
                             client_name: o.clientName,
-                            client_phone: o.clientPhone.replace(/\D/g, ''),
-                            address: meta.resolved_address || o.clientAddress,
+                            client_phone: phoneKey,
+                            address: finalResolvedAddress,
                             raw_address: o.clientAddress,
-                            localidad: meta.resolved_localidad || detectarLocalidad(meta.resolved_address || o.clientAddress, meta.latitude, meta.longitude),
+                            localidad: finalResolvedLocalidad,
                             time_window: meta.time_window || "10:00 - 12:00",
                             amount: o.totalValue,
                             pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
@@ -507,12 +532,12 @@ function getMergedDeliveries() {
                             qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
                             expected_items: expectedItems,
                             collected_items: meta.collected_items !== undefined ? meta.collected_items : expectedItems,
-                            evidence_photo: meta.evidence_photo || null,
+                            evidence_photo: finalEvidencePhoto,
                             signature_drawn: meta.signature_drawn === 1,
                             order_date: meta.delivery_date || o.scheduledDate || dateStr,
                             sync_pending: false,
-                            latitude: meta.latitude || null,
-                            longitude: meta.longitude || null,
+                            latitude: finalLatitude,
+                            longitude: finalLongitude,
                             chat_transcription: o.chatTranscription || null,
                             items: itemsMap[o.id] || [],
                             items_comments: meta.items_comments || null
@@ -1159,7 +1184,7 @@ function startBackgroundGeocoding() {
             const geocodedIds = metaRows ? metaRows.map(r => r.order_id) : [];
             
             // 2. Buscar una orden en local_orders (chatbot db) que no esté en la lista de geocodificados
-                        let query = `SELECT id, clientAddress FROM local_orders`;
+                        let query = `SELECT id, clientPhone, clientAddress, scheduledDate FROM local_orders`;
             let params = [];
             
             if (geocodedIds.length > 0) {
@@ -1180,105 +1205,165 @@ function startBackgroundGeocoding() {
                 }
                 
                 const order = rows[0];
-                const address = order.clientAddress;
+                const phoneKey = order.clientPhone ? order.clientPhone.replace(/\D/g, '') : '';
                 
-                if (!address || address === 'Recogida WhatsApp') {
-                    const nowEpoch = Math.floor(Date.now() / 1000);
-                    const baseLat = 4.7011;
-                    const baseLng = -74.0330;
+                const proceedWithNormalGeocoding = (orderToGeocode) => {
+                    const address = orderToGeocode.clientAddress;
                     
-                    appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
-                        if (err) return;
-                        if (meta) {
-                            appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', nowEpoch, order.id]);
-                        } else {
-                            const finalDate = order.scheduledDate || getColombiaDateString();
-                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', finalDate, nowEpoch]);
-                        }
-                    });
-                    return;
-                }
-
-                // 3. Si la dirección es de tipo "Ubicación GPS: lat, lon" o un enlace a Google Maps con coordenadas
-                let lat = null;
-                let lon = null;
-                let isGps = false;
-
-                let genericMatch = address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
-                if (!genericMatch) {
-                    const latLngMatch = address.match(/lat\s*(-?\d+\.\d+).*?lng\s*(-?\d+\.\d+)/i);
-                    if (latLngMatch) {
-                        genericMatch = latLngMatch;
-                    }
-                }
-                const isUrlOrGps = address.toLowerCase().includes("maps") || address.toLowerCase().includes("gps") || address.startsWith("http") || address.includes("Ubicación");
-                
-                if (genericMatch && (isUrlOrGps || address.length < 100)) {
-                    lat = parseFloat(genericMatch[1]);
-                    lon = parseFloat(genericMatch[2]);
-                    isGps = true;
-                }
-
-                if (isGps) {
-                    console.log(`📡 [Geocoder] Detectada ubicación GPS: (${lat}, ${lon}) para orden ${order.id}. Realizando geocodificación inversa...`);
-                    
-                    reverseGeocode(lat, lon).then(result => {
+                    if (!address || address === 'Recogida WhatsApp') {
                         const nowEpoch = Math.floor(Date.now() / 1000);
-                        const resolvedAddress = result ? result.display_name : `Ubicación GPS: ${lat}, ${lon}`;
-                        const resolvedLocalidad = result && result.localidad ? result.localidad : detectarLocalidad(address, lat, lon);
+                        const baseLat = 4.7011;
+                        const baseLng = -74.0330;
                         
-                        console.log(`✅ [Geocoder] Ubicación GPS resuelta: "${resolvedAddress}" [${resolvedLocalidad}]`);
-                        
-                        appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
+                        appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [orderToGeocode.id], (err, meta) => {
                             if (err) return;
                             if (meta) {
-                                appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [lat, lon, resolvedAddress, resolvedLocalidad, nowEpoch, order.id]);
+                                appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', nowEpoch, orderToGeocode.id]);
                             } else {
-                                const finalDate = order.scheduledDate || getColombiaDateString();
-                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, lat, lon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch]);
+                                const finalDate = orderToGeocode.scheduledDate || getColombiaDateString();
+                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', finalDate, nowEpoch]);
+                            }
+                        });
+                        return;
+                    }
+
+                    // 3. Si la dirección es de tipo "Ubicación GPS: lat, lon" o un enlace a Google Maps con coordenadas
+                    let lat = null;
+                    let lon = null;
+                    let isGps = false;
+
+                    let genericMatch = address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+                    if (!genericMatch) {
+                        const latLngMatch = address.match(/lat\s*(-?\d+\.\d+).*?lng\s*(-?\d+\.\d+)/i);
+                        if (latLngMatch) {
+                            genericMatch = latLngMatch;
+                        }
+                    }
+                    const isUrlOrGps = address.toLowerCase().includes("maps") || address.toLowerCase().includes("gps") || address.startsWith("http") || address.includes("Ubicación");
+                    
+                    if (genericMatch && (isUrlOrGps || address.length < 100)) {
+                        lat = parseFloat(genericMatch[1]);
+                        lon = parseFloat(genericMatch[2]);
+                        isGps = true;
+                    }
+
+                    if (isGps) {
+                        console.log(`📡 [Geocoder] Detectada ubicación GPS: (${lat}, ${lon}) para orden ${orderToGeocode.id}. Realizando geocodificación inversa...`);
+                        
+                        reverseGeocode(lat, lon).then(result => {
+                            const nowEpoch = Math.floor(Date.now() / 1000);
+                            const resolvedAddress = result ? result.display_name : `Ubicación GPS: ${lat}, ${lon}`;
+                            const resolvedLocalidad = result && result.localidad ? result.localidad : detectarLocalidad(address, lat, lon);
+                            
+                            console.log(`✅ [Geocoder] Ubicación GPS resuelta: "${resolvedAddress}" [${resolvedLocalidad}]`);
+                            
+                            appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [orderToGeocode.id], (err, meta) => {
+                                if (err) return;
+                                if (meta) {
+                                    appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [lat, lon, resolvedAddress, resolvedLocalidad, nowEpoch, orderToGeocode.id]);
+                                } else {
+                                    const finalDate = orderToGeocode.scheduledDate || getColombiaDateString();
+                                    appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, lat, lon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch]);
+                                }
+                            });
+                        });
+                        return;
+                    }
+
+                    // 4. Dirección normal de texto
+                    console.log(`📡 [Geocoder] Intentando geolocalizar dirección de texto: "${address}" para orden ${orderToGeocode.id}...`);
+                    geocodeAddress(address).then(coords => {
+                        const nowEpoch = Math.floor(Date.now() / 1000);
+                        let finalLat = coords ? coords.lat : null;
+                        let finalLon = coords ? coords.lon : null;
+                        let resolvedAddress = coords ? coords.display_name : address;
+                        let resolvedLocalidad = coords ? coords.localidad : null;
+                        
+                        if (!finalLat || !finalLon) {
+                            resolvedLocalidad = detectarLocalidad(address);
+                            const fallback = getLocalidadCenterCoords(resolvedLocalidad);
+                            finalLat = fallback.lat;
+                            finalLon = fallback.lon;
+                            console.log(`⚠️ [Geocoder] No se pudo encontrar coordenadas para "${address}". Asignando centro de ${resolvedLocalidad}: (${finalLat}, ${finalLon})`);
+                        } else {
+                            if (!resolvedLocalidad) {
+                                resolvedLocalidad = detectarLocalidad(resolvedAddress, finalLat, finalLon);
+                            }
+                            console.log(`✅ [Geocoder] Geolocalizado con éxito: "${resolvedAddress}" (${finalLat}, ${finalLon}) [${resolvedLocalidad}]`);
+                        }
+
+                        // Guardar/Actualizar en domiciliaria.db de forma segura
+                        appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [orderToGeocode.id], (err, meta) => {
+                            if (err) return;
+                            if (meta) {
+                                appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [finalLat, finalLon, resolvedAddress, resolvedLocalidad, nowEpoch, orderToGeocode.id], (err) => {
+                                    if (err) console.error("❌ [Geocoder] Error al actualizar coordenadas:", err.message);
+                                });
+                            } else {
+                                const finalDate = orderToGeocode.scheduledDate || getColombiaDateString();
+                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch], (err) => {
+                                    if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
+                                });
                             }
                         });
                     });
-                    return;
-                }
+                };
 
-                // 4. Dirección normal de texto
-                console.log(`📡 [Geocoder] Intentando geolocalizar dirección de texto: "${address}" para orden ${order.id}...`);
-                geocodeAddress(address).then(coords => {
-                    const nowEpoch = Math.floor(Date.now() / 1000);
-                    let finalLat = coords ? coords.lat : null;
-                    let finalLon = coords ? coords.lon : null;
-                    let resolvedAddress = coords ? coords.display_name : address;
-                    let resolvedLocalidad = coords ? coords.localidad : null;
-                    
-                    if (!finalLat || !finalLon) {
-                        resolvedLocalidad = detectarLocalidad(address);
-                        const fallback = getLocalidadCenterCoords(resolvedLocalidad);
-                        finalLat = fallback.lat;
-                        finalLon = fallback.lon;
-                        console.log(`⚠️ [Geocoder] No se pudo encontrar coordenadas para "${address}". Asignando centro de ${resolvedLocalidad}: (${finalLat}, ${finalLon})`);
-                    } else {
-                        if (!resolvedLocalidad) {
-                            resolvedLocalidad = detectarLocalidad(resolvedAddress, finalLat, finalLon);
+                // Intentar recuperar coordenadas e imagen de fachada históricas si existen
+                if (phoneKey) {
+                    chatbotDb.all(`SELECT id FROM local_orders WHERE clientPhone LIKE ?`, [`%${phoneKey}`], (err, prevOrders) => {
+                        if (err || !prevOrders || prevOrders.length <= 1) {
+                            proceedWithNormalGeocoding(order);
+                            return;
                         }
-                        console.log(`✅ [Geocoder] Geolocalizado con éxito: "${resolvedAddress}" (${finalLat}, ${finalLon}) [${resolvedLocalidad}]`);
-                    }
-
-                    // Guardar/Actualizar en domiciliaria.db de forma segura
-                    appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [order.id], (err, meta) => {
-                        if (err) return;
-                        if (meta) {
-                            appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [finalLat, finalLon, resolvedAddress, resolvedLocalidad, nowEpoch, order.id], (err) => {
-                                if (err) console.error("❌ [Geocoder] Error al actualizar coordenadas:", err.message);
-                            });
-                        } else {
-                            const finalDate = order.scheduledDate || getColombiaDateString();
-                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch], (err) => {
-                                if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
-                            });
+                        
+                        const prevIds = prevOrders.map(po => po.id).filter(id => id !== order.id);
+                        if (prevIds.length === 0) {
+                            proceedWithNormalGeocoding(order);
+                            return;
                         }
+                        
+                        const placeholders = prevIds.map(() => '?').join(',');
+                        appDb.get(`
+                            SELECT latitude, longitude, resolved_address, resolved_localidad, evidence_photo 
+                            FROM delivery_metadata 
+                            WHERE order_id IN (${placeholders}) AND latitude IS NOT NULL 
+                            ORDER BY updated_at DESC LIMIT 1
+                        `, prevIds, (err, historicalMeta) => {
+                            if (!err && historicalMeta) {
+                                const nowEpoch = Math.floor(Date.now() / 1000);
+                                const finalDate = order.scheduledDate || getColombiaDateString();
+                                
+                                appDb.run(`
+                                    INSERT INTO delivery_metadata (
+                                        order_id, latitude, longitude, resolved_address, resolved_localidad, 
+                                        evidence_photo, delivery_date, updated_at
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                `, [
+                                    order.id, 
+                                    historicalMeta.latitude, 
+                                    historicalMeta.longitude, 
+                                    historicalMeta.resolved_address, 
+                                    historicalMeta.resolved_localidad, 
+                                    historicalMeta.evidence_photo, 
+                                    finalDate, 
+                                    nowEpoch
+                                ], (err) => {
+                                    if (err) {
+                                        console.error("❌ [Geocoder] Error al insertar coordenadas históricas:", err.message);
+                                        proceedWithNormalGeocoding(order);
+                                    } else {
+                                        console.log(`♻️ [Geocoder] Reutilizada ubicación y fachada histórica para el cliente ${order.id} (${phoneKey}).`);
+                                    }
+                                });
+                            } else {
+                                proceedWithNormalGeocoding(order);
+                            }
+                        });
                     });
-                });
+                } else {
+                    proceedWithNormalGeocoding(order);
+                }
             });
         });
     }, 5000);
