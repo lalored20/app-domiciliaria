@@ -650,21 +650,6 @@ function renderDeliveriesView(container) {
         locWrapper.style.display = "none";
     }
 
-    const walletWidget = `
-        <div class="wallet-widget">
-            <div class="wallet-item">
-                <div class="wallet-label">Recaudo Efectivo</div>
-                <div class="wallet-val">$${currentShift.collected_cash.toLocaleString()}</div>
-            </div>
-            <div class="wallet-item">
-                <div class="wallet-label">Comisión Hoy</div>
-                <div class="wallet-val highlight">$${(deliveries.filter(d => d.status === "ENTREGADO" && d.order_date === currentShift.shift_date).length * 8000).toLocaleString()}</div>
-            </div>
-        </div>
-    `;
-
-    container.innerHTML += walletWidget;
-
     // Sección de Siguiente / En Ruta
     container.innerHTML += `
         <div class="section-title">
@@ -672,7 +657,7 @@ function renderDeliveriesView(container) {
             <span class="badge-count">${activeRoute.length}</span>
         </div>
     `;
-
+ 
     const activeList = document.createElement("div");
     activeList.className = "delivery-list";
     if (activeRoute.length === 0) {
@@ -683,7 +668,7 @@ function renderDeliveriesView(container) {
         });
     }
     container.appendChild(activeList);
-
+ 
     // Sección de Pendientes con botón de Auto-Ruta
     container.innerHTML += `
         <div class="section-title" style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
@@ -696,7 +681,7 @@ function renderDeliveriesView(container) {
             </div>
         </div>
     `;
-
+ 
     const pendingList = document.createElement("div");
     pendingList.className = "delivery-list";
     if (pending.length === 0) {
@@ -707,7 +692,7 @@ function renderDeliveriesView(container) {
         });
     }
     container.appendChild(pendingList);
-
+ 
     // Sección de Entregados
     if (completed.length > 0) {
         container.innerHTML += `
@@ -723,6 +708,21 @@ function renderDeliveriesView(container) {
         });
         container.appendChild(completedList);
     }
+
+    // Inyectar el panel de Recaudo y Comisión al final de todo para no estorbar el flujo visual
+    const walletWidget = `
+        <div class="wallet-widget" style="margin-top: 25px; margin-bottom: 20px;">
+            <div class="wallet-item">
+                <div class="wallet-label">Recaudo Efectivo</div>
+                <div class="wallet-val">$${currentShift.collected_cash.toLocaleString()}</div>
+            </div>
+            <div class="wallet-item">
+                <div class="wallet-label">Comisión Hoy</div>
+                <div class="wallet-val highlight">$${(deliveries.filter(d => d.status === "ENTREGADO" && d.order_date === currentShift.shift_date).length * 8000).toLocaleString()}</div>
+            </div>
+        </div>
+    `;
+    container.innerHTML += walletWidget;
 }
 
 function createDeliveryCard(d) {
