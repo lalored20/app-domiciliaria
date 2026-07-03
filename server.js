@@ -429,7 +429,6 @@ function detectarLocalidad(direccion, lat, lon) {
 function esDireccionSimilar(addr1, addr2) {
     if (!addr1 || !addr2) return false;
     
-    // Normalizar a minúsculas, remover tildes y dejar palabras y números
     const normalize = (str) => {
         return str.toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remover acentos
@@ -440,12 +439,26 @@ function esDireccionSimilar(addr1, addr2) {
     const n1 = normalize(addr1);
     const n2 = normalize(addr2);
     
-    // Si una es de recogida genérica
-    if (n1.includes("recogida whatsapp") || n2.includes("recogida whatsapp")) {
-        return true;
-    }
+    // Si son exactamente iguales tras normalizar
+    if (n1 === n2) return true;
     
-    // Extraer números de cada dirección
+    // Función auxiliar para detectar si una dirección es una plantilla genérica
+    const esGenerica = (str) => {
+        const s = str.toLowerCase();
+        return s.includes("confirmar") || s.includes("recogida") || s.includes("exacta recibida") || 
+               s.includes("ubicacion recibida") || s.includes("whatsapp") || s.length < 12;
+    };
+    
+    const gen1 = esGenerica(addr1);
+    const gen2 = esGenerica(addr2);
+    
+    // Si una es genérica y la otra es específica, no son similares
+    if (gen1 !== gen2) return false;
+    
+    // Si ambas son genéricas, las permitimos asociar
+    if (gen1 && gen2) return true;
+    
+    // Si ambas son específicas, comparamos números clave
     const getNumbers = (str) => {
         const matches = str.match(/\b\d+\b/g);
         return matches ? matches : [];
@@ -454,13 +467,16 @@ function esDireccionSimilar(addr1, addr2) {
     const num1 = getNumbers(n1);
     const num2 = getNumbers(n2);
     
-    // Si tienen números de calle o carrera principales diferentes
+    // Si una tiene números de nomenclatura y la otra no, no son similares
+    if ((num1.length > 0) !== (num2.length > 0)) return false;
+    
+    // Comparar primer y segundo número principal de la dirección (ej: Calle 98 # 76)
     if (num1.length > 0 && num2.length > 0) {
         if (num1[0] !== num2[0]) return false;
         if (num1.length > 1 && num2.length > 1 && num1[1] !== num2[1]) return false;
     }
     
-    // Si la localidad detectada de manera textual difiere
+    // Comparar la localidad de forma textual
     const loc1 = detectarLocalidad(addr1);
     const loc2 = detectarLocalidad(addr2);
     if (loc1 && loc2 && loc1 !== loc2) {
