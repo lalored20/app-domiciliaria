@@ -860,13 +860,14 @@ app.post('/api/deliveries/sync', async (req, res) => {
     // Procesar cada entrega de forma secuencial en SQLite
     const promises = clientDeliveries.map(clientD => {
         return new Promise((resolve) => {
-            // 1. Actualizar el estado en el chatbot's messages.db
+            // 1. Actualizar el estado y el monto cobrado (totalValue) en el chatbot's messages.db
             chatbotDb.run(`
                 UPDATE local_orders 
-                SET status = ?, updated_at = ? 
+                SET status = ?, totalValue = ?, updated_at = ? 
                 WHERE id = ? OR ticketNumber = ?
             `, [
                 clientD.status,
+                clientD.amount || 0,
                 nowEpoch,
                 clientD.id,
                 clientD.id.replace('QR-ORQUIDEAS-', '')
@@ -1191,7 +1192,8 @@ function startBackgroundGeocoding() {
                         if (meta) {
                             appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', nowEpoch, order.id]);
                         } else {
-                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', getColombiaDateString(), nowEpoch]);
+                            const finalDate = order.scheduledDate || getColombiaDateString();
+                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', finalDate, nowEpoch]);
                         }
                     });
                     return;
@@ -1202,7 +1204,7 @@ function startBackgroundGeocoding() {
                 let lon = null;
                 let isGps = false;
 
-                                let genericMatch = address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+                let genericMatch = address.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
                 if (!genericMatch) {
                     const latLngMatch = address.match(/lat\s*(-?\d+\.\d+).*?lng\s*(-?\d+\.\d+)/i);
                     if (latLngMatch) {
@@ -1232,7 +1234,8 @@ function startBackgroundGeocoding() {
                             if (meta) {
                                 appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [lat, lon, resolvedAddress, resolvedLocalidad, nowEpoch, order.id]);
                             } else {
-                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, lat, lon, resolvedAddress, resolvedLocalidad, getColombiaDateString(), nowEpoch]);
+                                const finalDate = order.scheduledDate || getColombiaDateString();
+                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, lat, lon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch]);
                             }
                         });
                     });
@@ -1269,7 +1272,8 @@ function startBackgroundGeocoding() {
                                 if (err) console.error("❌ [Geocoder] Error al actualizar coordenadas:", err.message);
                             });
                         } else {
-                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, getColombiaDateString(), nowEpoch], (err) => {
+                            const finalDate = order.scheduledDate || getColombiaDateString();
+                            appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [order.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch], (err) => {
                                 if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
                             });
                         }
