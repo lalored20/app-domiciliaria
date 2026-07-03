@@ -801,17 +801,21 @@ function createDeliveryCard(d) {
     const isWarningAddress = d.address === 'Recogida WhatsApp';
 
     card.innerHTML = `
-        <div class="card-header">
-            <div style="display:flex; align-items:center; gap:8px;">
-                ${d.status !== 'ENTREGADO' ? `<div class="drag-handle" title="Arrastrar para ordenar">⋮⋮</div>` : ''}
-                <div class="time-badge">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                ${d.status !== 'ENTREGADO' ? `<div class="drag-handle" title="Arrastrar para ordenar" style="cursor: grab; padding: 2px 4px; color: var(--text-muted); font-size: 13px;">⋮⋮</div>` : ''}
+                <div class="time-badge" style="display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--text-main); background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 2px 6px; border-radius: 6px;">
                     🕒 <span>${d.time_window}</span>
                 </div>
-                ${d.localidad ? `<span class="locality-badge" style="background: rgba(16, 185, 129, 0.12); color: #10b981; font-size: 11px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.25); white-space: nowrap;">📍 ${d.localidad}</span>` : ''}
-                ${d.ticket_number ? `<span class="ticket-badge" style="background: rgba(139, 92, 246, 0.15); color: var(--primary); font-size: 11px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(139, 92, 246, 0.25);">🎟️ #${d.ticket_number}</span>` : ''}
             </div>
             <div class="status-pill ${statusClass}">${statusLabel}</div>
         </div>
+        
+        <div class="card-meta-row" style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; padding: 0 4px;">
+            ${d.localidad ? `<span class="locality-badge" style="background: rgba(16, 185, 129, 0.08); color: #10b981; font-size: 10px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.2); white-space: nowrap; display: inline-flex; align-items: center; gap: 2px;">📍 ${d.localidad}</span>` : ''}
+            ${d.ticket_number ? `<span class="ticket-badge" style="background: rgba(139, 92, 246, 0.08); color: var(--primary); font-size: 10px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(139, 92, 246, 0.2); white-space: nowrap; display: inline-flex; align-items: center; gap: 2px;">🎟️ #${d.ticket_number}</span>` : ''}
+        </div>
+        
         <div class="card-body">
             <div class="client-name" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                 <span>${d.client_name}</span>
