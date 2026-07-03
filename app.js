@@ -633,8 +633,9 @@ function groupDeliveries(deliveriesArray) {
 
 // Vista de Domicilios
 function renderDeliveriesView(container) {
+    // Filtrar todos los pedidos para la fecha seleccionada hoy, sin importar la localidad
     const filtered = deliveries
-        .filter(d => d.localidad === currentLocalidad && d.order_date === currentDate)
+        .filter(d => d.order_date === currentDate)
         .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
         
     const grouped = groupDeliveries(filtered);
@@ -642,6 +643,12 @@ function renderDeliveriesView(container) {
     const activeRoute = grouped.filter(d => d.status === "EN_RUTA");
     const pending = grouped.filter(d => d.status === "PENDIENTE");
     const completed = grouped.filter(d => d.status === "ENTREGADO");
+
+    // Ocultar la barra de localidades superior
+    const locWrapper = document.querySelector(".localidad-nav-wrapper");
+    if (locWrapper) {
+        locWrapper.style.display = "none";
+    }
 
     const walletWidget = `
         <div class="wallet-widget">
@@ -800,6 +807,7 @@ function createDeliveryCard(d) {
                 <div class="time-badge">
                     🕒 <span>${d.time_window}</span>
                 </div>
+                ${d.localidad ? `<span class="locality-badge" style="background: rgba(16, 185, 129, 0.12); color: #10b981; font-size: 11px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.25); white-space: nowrap;">📍 ${d.localidad}</span>` : ''}
                 ${d.ticket_number ? `<span class="ticket-badge" style="background: rgba(139, 92, 246, 0.15); color: var(--primary); font-size: 11px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(139, 92, 246, 0.25);">🎟️ #${d.ticket_number}</span>` : ''}
             </div>
             <div class="status-pill ${statusClass}">${statusLabel}</div>
@@ -1259,18 +1267,13 @@ function getHaversineDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-async function optimizeRouteByProximity(localidad, silent = false) {
-    addSystemLog(`⚡ Iniciando optimización de ruta para ${localidad}...`);
+async function optimizeRouteByProximity(silent = false) {
+    addSystemLog(`⚡ Iniciando optimización de ruta diaria...`);
     
-    // Punto de partida inicial: Lavaseco Orquídeas base (Usaquén)
-    let startLat = 4.7011;
-    let startLng = -74.0330;
-    
-    // Si la localidad es Suba, centrar el punto de partida en Suba
-    if (localidad === 'Suba') {
-        startLat = 4.7250;
-        startLng = -74.0850;
-    }
+    // Punto de partida inicial: Coordenadas reales de Lavaseco Orquídeas base (Usaquén)
+    // Calle 163A, Soratama / Las Orquídeas
+    let startLat = 4.74283;
+    let startLng = -74.04057;
     
     // Intentar capturar la ubicación GPS del repartidor para optimizar desde su posición actual
     if (navigator.geolocation) {
@@ -1286,8 +1289,8 @@ async function optimizeRouteByProximity(localidad, silent = false) {
         }
     }
     
-    // Filtrar los pedidos no completados en la localidad activa para la fecha actual
-    let pendingLoc = deliveries.filter(d => d.localidad === localidad && d.status !== 'ENTREGADO' && d.order_date === currentDate);
+    // Filtrar todos los pedidos no completados de la fecha actual
+    let pendingLoc = deliveries.filter(d => d.status !== 'ENTREGADO' && d.order_date === currentDate);
     if (pendingLoc.length <= 1) {
         if (!silent) {
             addSystemLog("ℹ️ No hay suficientes pedidos pendientes para optimizar.");
@@ -1351,15 +1354,15 @@ async function optimizeRouteByProximity(localidad, silent = false) {
     });
     
     // Asignar orden final a los completados para que queden abajo
-    let completedLoc = deliveries.filter(d => d.localidad === localidad && d.status === 'ENTREGADO' && d.order_date === currentDate);
+    let completedLoc = deliveries.filter(d => d.status === 'ENTREGADO' && d.order_date === currentDate);
     completedLoc.forEach((d, idx) => {
         d.sort_order = (orderedRoute.length + idx) * 10;
     });
     
-    // Ordenar el array general de entregas para persistir consistencia
+    // Ordenar el array general de entregas para persistir consistencia de forma global sin ordenar por localidad
     deliveries.sort((a, b) => {
-        if (a.localidad !== b.localidad) {
-            return a.localidad.localeCompare(b.localidad);
+        if (a.order_date !== b.order_date) {
+            return a.order_date.localeCompare(b.order_date);
         }
         if (a.status === 'ENTREGADO' && b.status !== 'ENTREGADO') return 1;
         if (a.status !== 'ENTREGADO' && b.status === 'ENTREGADO') return -1;
@@ -1370,13 +1373,13 @@ async function optimizeRouteByProximity(localidad, silent = false) {
     });
     
     await saveDeliveries();
-    addSystemLog(`✅ Ruta de ${localidad} optimizada con éxito.`);
+    addSystemLog(`✅ Ruta diaria optimizada con éxito.`);
     
     renderLocalidades();
     renderContent();
     
     if (!silent) {
-        alert("⚡ ¡Ruta optimizada por proximidad con éxito!");
+        alert("⚡ ¡Ruta diaria optimizada por proximidad con éxito!");
     }
 }
 
