@@ -3373,7 +3373,7 @@ async function runBackgroundSync() {
                 if (result.success && result.data) {
                     let updatedCount = 0;
                     for (const serverD of result.data) {
-                        const localItem = localD.find(d => d.id === serverD.id || (d.chatbot_order_id && d.chatbot_order_id === serverD.chatbot_order_id));
+                        const localItem = localD.find(d => d.id === serverD.id);
                         
                         if (!localItem) {
                             localD.push(serverD);

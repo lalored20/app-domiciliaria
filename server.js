@@ -330,6 +330,18 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
             appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN return_time_window TEXT`, (err) => {
                 // Silenciar error si la columna ya existe
             });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN return_status TEXT DEFAULT 'PENDIENTE'`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN return_evidence_photo TEXT`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN return_signature_drawn INTEGER DEFAULT 0`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN return_items_comments TEXT`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
             appDb.run(`CREATE TABLE IF NOT EXISTS client_facade (
                 client_phone TEXT PRIMARY KEY,
                 client_name TEXT,
@@ -694,7 +706,8 @@ function getMergedDeliveries() {
                         }
                     });
                     
-                    const merged = chatbotOrders.map(o => {
+                    const merged = [];
+                    chatbotOrders.forEach(o => {
                         const meta = metadataMap[o.id] || {};
                         const phoneKey = o.clientPhone.replace(/\D/g, '');
                         const histData = phoneHistoryMap[phoneKey] || {};
@@ -727,26 +740,28 @@ function getMergedDeliveries() {
                         const finalOrderDate = meta.delivery_date || o.scheduledDate || parsedDate || dateStr;
                         const finalTimeWindow = meta.time_window || parsedTimeWindow || "10:00 - 12:00";
 
-                        return {
+                        // 1. Agregar la recogida principal
+                        merged.push({
                             id: o.id,
+                            order_id: o.id,
                             chatbot_order_id: o.id,
-                                ticket_number: o.ticketNumber,
-                                client_name: o.clientName,
-                                client_phone: phoneKey,
-                                address: finalResolvedAddress,
-                                raw_address: o.clientAddress,
-                                localidad: finalResolvedLocalidad,
-                                time_window: finalTimeWindow,
-                                amount: o.totalValue,
-                                pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
-                                status: o.status || 'PENDIENTE',
-                                qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
-                                expected_items: expectedItems,
-                                collected_items: meta.collected_items !== undefined ? meta.collected_items : expectedItems,
-                                evidence_photo: finalEvidencePhoto,
-                                signature_drawn: meta.signature_drawn === 1,
-                                order_date: finalOrderDate,
-                                sync_pending: false,
+                            ticket_number: o.ticketNumber,
+                            client_name: o.clientName,
+                            client_phone: phoneKey,
+                            address: finalResolvedAddress,
+                            raw_address: o.clientAddress,
+                            localidad: finalResolvedLocalidad,
+                            time_window: finalTimeWindow,
+                            amount: o.totalValue,
+                            pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
+                            status: o.status || 'PENDIENTE',
+                            qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
+                            expected_items: expectedItems,
+                            collected_items: meta.collected_items !== undefined ? meta.collected_items : expectedItems,
+                            evidence_photo: finalEvidencePhoto,
+                            signature_drawn: meta.signature_drawn === 1,
+                            order_date: finalOrderDate,
+                            sync_pending: false,
                             latitude: finalLatitude,
                             longitude: finalLongitude,
                             chat_transcription: o.chatTranscription || null,
@@ -755,7 +770,41 @@ function getMergedDeliveries() {
                             delivery_type: meta.delivery_type || "RECOGIDA",
                             return_delivery_date: meta.return_delivery_date || null,
                             return_time_window: meta.return_time_window || null
-                        };
+                        });
+
+                        // 2. Agregar la entrega de retorno si está programada
+                        if (meta.return_delivery_date) {
+                            merged.push({
+                                id: o.id + "_return",
+                                order_id: o.id,
+                                chatbot_order_id: o.id,
+                                ticket_number: o.ticketNumber,
+                                client_name: o.clientName,
+                                client_phone: phoneKey,
+                                address: finalResolvedAddress,
+                                raw_address: o.clientAddress,
+                                localidad: finalResolvedLocalidad,
+                                time_window: meta.return_time_window || "12:00 - 15:00",
+                                amount: 0,
+                                pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
+                                status: meta.return_status || "PENDIENTE",
+                                qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
+                                expected_items: expectedItems,
+                                collected_items: expectedItems,
+                                evidence_photo: meta.return_evidence_photo || null,
+                                signature_drawn: meta.return_signature_drawn === 1,
+                                order_date: meta.return_delivery_date,
+                                sync_pending: false,
+                                latitude: finalLatitude,
+                                longitude: finalLongitude,
+                                chat_transcription: o.chatTranscription || null,
+                                items: itemsMap[o.id] || [],
+                                items_comments: meta.return_items_comments || null,
+                                delivery_type: "ENTREGA",
+                                return_delivery_date: meta.return_delivery_date,
+                                return_time_window: meta.return_time_window
+                            });
+                        }
                     });
                     
                     // Simular pedidos precisos para mañana (2026-07-01) para pruebas de ruta
@@ -1192,6 +1241,9 @@ app.post('/api/deliveries/sync', async (req, res) => {
     const promises = clientDeliveries.map(clientD => {
         return new Promise((resolve) => {
             const clientUpdatedAt = clientD.status_updated_at || nowEpoch;
+            const isReturn = clientD.id && clientD.id.endsWith('_return');
+            const targetId = isReturn ? clientD.id.replace('_return', '') : clientD.id;
+            
             // 1. Actualizar el estado y el monto cobrado (totalValue) en el chatbot's messages.db
             chatbotDb.run(`
                 UPDATE local_orders 
@@ -1201,56 +1253,80 @@ app.post('/api/deliveries/sync', async (req, res) => {
                 clientD.status,
                 clientD.amount || 0,
                 clientUpdatedAt,
-                clientD.id,
-                clientD.id.replace('QR-ORQUIDEAS-', ''),
+                targetId,
+                targetId.replace('QR-ORQUIDEAS-', ''),
                 clientUpdatedAt
             ], (err) => {
                 if (err) {
                     console.error(`❌ Error actualizando estado en messages.db para ${clientD.id}:`, err.message);
                 }
                 
-                // 2. Guardar metadatos extendidos en nuestra domiciliaria.db
-                appDb.run(`
-                    INSERT INTO delivery_metadata (
-                        order_id, time_window, expected_items, collected_items, 
-                        evidence_photo, signature_drawn, latitude, longitude, 
-                        delivery_date, items_comments, updated_at, delivery_type, 
-                        return_delivery_date, return_time_window
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(order_id) DO UPDATE SET
-                        time_window = excluded.time_window,
-                        expected_items = excluded.expected_items,
-                        collected_items = excluded.collected_items,
-                        evidence_photo = COALESCE(excluded.evidence_photo, delivery_metadata.evidence_photo),
-                        signature_drawn = excluded.signature_drawn,
-                        latitude = COALESCE(excluded.latitude, delivery_metadata.latitude),
-                        longitude = COALESCE(excluded.longitude, delivery_metadata.longitude),
-                        delivery_date = excluded.delivery_date,
-                        items_comments = excluded.items_comments,
-                        updated_at = excluded.updated_at,
-                        delivery_type = excluded.delivery_type,
-                        return_delivery_date = excluded.return_delivery_date,
-                        return_time_window = excluded.return_time_window
-                    WHERE excluded.updated_at >= delivery_metadata.updated_at OR delivery_metadata.updated_at IS NULL
-                `, [
-                    clientD.id,
-                    clientD.time_window || "10:00 - 12:00",
-                    clientD.expected_items || 1,
-                    clientD.collected_items || 1,
-                    clientD.evidence_photo || null,
-                    clientD.signature_drawn ? 1 : 0,
-                    (clientD.latitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.latitude) : null,
-                    (clientD.longitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.longitude) : null,
-                    clientD.order_date || getColombiaDateString(),
-                    clientD.items_comments || null,
-                    clientUpdatedAt,
-                    clientD.delivery_type || "RECOGIDA",
-                    clientD.return_delivery_date || null,
-                    clientD.return_time_window || null
-                ], (err) => {
-                    if (err) {
-                        console.error(`❌ Error guardando metadatos en domiciliaria.db para ${clientD.id}:`, err.message);
-                    }
+                if (isReturn) {
+                    // 2. Guardar metadatos de entrega de retorno en domiciliaria.db
+                    appDb.run(`
+                        UPDATE delivery_metadata SET 
+                            return_status = ?,
+                            return_evidence_photo = COALESCE(?, return_evidence_photo),
+                            return_signature_drawn = ?,
+                            return_items_comments = ?,
+                            updated_at = ?
+                        WHERE order_id = ?
+                    `, [
+                        clientD.status,
+                        clientD.evidence_photo || null,
+                        clientD.signature_drawn ? 1 : 0,
+                        clientD.items_comments || null,
+                        clientUpdatedAt,
+                        targetId
+                    ], (err) => {
+                        if (err) {
+                            console.error(`❌ Error guardando metadatos de retorno en domiciliaria.db para ${clientD.id}:`, err.message);
+                        }
+                        resolve();
+                    });
+                } else {
+                    // 2. Guardar metadatos extendidos en nuestra domiciliaria.db
+                    appDb.run(`
+                        INSERT INTO delivery_metadata (
+                            order_id, time_window, expected_items, collected_items, 
+                            evidence_photo, signature_drawn, latitude, longitude, 
+                            delivery_date, items_comments, updated_at, delivery_type, 
+                            return_delivery_date, return_time_window
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(order_id) DO UPDATE SET
+                            time_window = excluded.time_window,
+                            expected_items = excluded.expected_items,
+                            collected_items = excluded.collected_items,
+                            evidence_photo = COALESCE(excluded.evidence_photo, delivery_metadata.evidence_photo),
+                            signature_drawn = excluded.signature_drawn,
+                            latitude = COALESCE(excluded.latitude, delivery_metadata.latitude),
+                            longitude = COALESCE(excluded.longitude, delivery_metadata.longitude),
+                            delivery_date = excluded.delivery_date,
+                            items_comments = excluded.items_comments,
+                            updated_at = excluded.updated_at,
+                            delivery_type = excluded.delivery_type,
+                            return_delivery_date = excluded.return_delivery_date,
+                            return_time_window = excluded.return_time_window
+                        WHERE excluded.updated_at >= delivery_metadata.updated_at OR delivery_metadata.updated_at IS NULL
+                    `, [
+                        clientD.id,
+                        clientD.time_window || "10:00 - 12:00",
+                        clientD.expected_items || 1,
+                        clientD.collected_items || 1,
+                        clientD.evidence_photo || null,
+                        clientD.signature_drawn ? 1 : 0,
+                        (clientD.latitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.latitude) : null,
+                        (clientD.longitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.longitude) : null,
+                        clientD.order_date || getColombiaDateString(),
+                        clientD.items_comments || null,
+                        clientUpdatedAt,
+                        clientD.delivery_type || "RECOGIDA",
+                        clientD.return_delivery_date || null,
+                        clientD.return_time_window || null
+                    ], (err) => {
+                        if (err) {
+                            console.error(`❌ Error guardando metadatos en domiciliaria.db para ${clientD.id}:`, err.message);
+                        }
                     
                     // Guardar información de fachada si está presente
                     if (clientD.facade_photo || (clientD.facade_latitude && clientD.facade_longitude)) {
