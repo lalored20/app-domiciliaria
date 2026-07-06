@@ -1400,9 +1400,10 @@ app.post('/api/deliveries/sync', async (req, res) => {
                         resolve();
                     }
                 });
-            });
+            }
         });
     });
+});
 
     try {
         await Promise.all(promises);
