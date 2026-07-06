@@ -321,6 +321,15 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
             appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN items_comments TEXT`, (err) => {
                 // Silenciar error si la columna ya existe
             });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN delivery_type TEXT DEFAULT 'RECOGIDA'`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN return_delivery_date TEXT`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN return_time_window TEXT`, (err) => {
+                // Silenciar error si la columna ya existe
+            });
             appDb.run(`CREATE TABLE IF NOT EXISTS client_facade (
                 client_phone TEXT PRIMARY KEY,
                 client_name TEXT,
@@ -486,6 +495,48 @@ function esDireccionSimilar(addr1, addr2) {
     return true;
 }
 
+// Extraer dinámicamente fecha y hora de la transcripción del chat si están ausentes de forma estructurada
+function extraerFechaYHoraDelChat(transcription, createdEpoch) {
+    const result = { date: null, timeWindow: null };
+    if (!transcription) return result;
+    
+    const dateMatch = transcription.match(/Recogida:\s*[A-Za-záéíóúñ]+\s+(\d+)\s+de\s+([A-Za-záéíóúñ]+)/i);
+    if (dateMatch) {
+        const day = parseInt(dateMatch[1]);
+        const monthStr = dateMatch[2].toLowerCase();
+        
+        const months = {
+            "enero": "01", "feb": "02", "febrero": "02", "mar": "03", "marzo": "03", 
+            "abr": "04", "abril": "04", "may": "05", "mayo": "05", "jun": "06", "junio": "06", 
+            "jul": "07", "julio": "07", "ago": "08", "agosto": "08", "sep": "09", "septiembre": "09", 
+            "oct": "10", "octubre": "10", "nov": "11", "noviembre": "11", "dic": "12", "diciembre": "12"
+        };
+        
+        const month = months[monthStr] || "07";
+        const year = new Date(createdEpoch * 1000).getFullYear() || 2026;
+        
+        const formattedDay = day < 10 ? `0${day}` : day;
+        result.date = `${year}-${month}-${formattedDay}`;
+    }
+    
+    const timeMatch = transcription.match(/entre\s+(\d+:\d+\s*[A-Z.]+)\s+y\s+(\d+:\d+\s*[A-Z.]+)/i);
+    if (timeMatch) {
+        const start = timeMatch[1].replace(/\s+/g, '').toUpperCase();
+        
+        if (start.includes("8:00AM") || start.includes("8AM")) {
+            result.timeWindow = "08:00 - 11:00";
+        } else if (start.includes("11:00AM") || start.includes("11AM")) {
+            result.timeWindow = "11:00 - 14:00";
+        } else if (start.includes("9:00AM") || start.includes("9AM")) {
+            result.timeWindow = "09:00 - 12:00";
+        } else if (start.includes("12:00PM") || start.includes("12PM") || start.includes("12:00")) {
+            result.timeWindow = "12:00 - 15:00";
+        }
+    }
+    
+    return result;
+}
+
 
 // Helper to get merged deliveries from SQLite databases
 function getMergedDeliveries() {
@@ -593,22 +644,46 @@ function getMergedDeliveries() {
                             address: finalResolvedAddress,
                             raw_address: o.clientAddress,
                             localidad: finalResolvedLocalidad,
-                            time_window: meta.time_window || "10:00 - 12:00",
-                            amount: o.totalValue,
-                            pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
-                            status: o.status || 'PENDIENTE',
-                            qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
-                            expected_items: expectedItems,
-                            collected_items: meta.collected_items !== undefined ? meta.collected_items : expectedItems,
-                            evidence_photo: finalEvidencePhoto,
-                            signature_drawn: meta.signature_drawn === 1,
-                            order_date: meta.delivery_date || o.scheduledDate || dateStr,
-                            sync_pending: false,
+                            // Extraer fecha y hora por IA parsing del chat si no están estructuradas
+                            let parsedDate = null;
+                            let parsedTimeWindow = null;
+                            if (!meta.delivery_date && !o.scheduledDate && o.chatTranscription) {
+                                const parsed = extraerFechaYHoraDelChat(o.chatTranscription, o.created_at);
+                                parsedDate = parsed.date;
+                                parsedTimeWindow = parsed.timeWindow;
+                            }
+
+                            const finalOrderDate = meta.delivery_date || o.scheduledDate || parsedDate || dateStr;
+                            const finalTimeWindow = meta.time_window || parsedTimeWindow || "10:00 - 12:00";
+
+                            return {
+                                id: o.id,
+                                chatbot_order_id: o.id,
+                                ticket_number: o.ticketNumber,
+                                client_name: o.clientName,
+                                client_phone: phoneKey,
+                                address: finalResolvedAddress,
+                                raw_address: o.clientAddress,
+                                localidad: finalResolvedLocalidad,
+                                time_window: finalTimeWindow,
+                                amount: o.totalValue,
+                                pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
+                                status: o.status || 'PENDIENTE',
+                                qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
+                                expected_items: expectedItems,
+                                collected_items: meta.collected_items !== undefined ? meta.collected_items : expectedItems,
+                                evidence_photo: finalEvidencePhoto,
+                                signature_drawn: meta.signature_drawn === 1,
+                                order_date: finalOrderDate,
+                                sync_pending: false,
                             latitude: finalLatitude,
                             longitude: finalLongitude,
                             chat_transcription: o.chatTranscription || null,
                             items: itemsMap[o.id] || [],
-                            items_comments: meta.items_comments || null
+                            items_comments: meta.items_comments || null,
+                            delivery_type: meta.delivery_type || "RECOGIDA",
+                            return_delivery_date: meta.return_delivery_date || null,
+                            return_time_window: meta.return_time_window || null
                         };
                     });
                     
@@ -778,7 +853,11 @@ app.post('/api/webhook/order', async (req, res) => {
         time_window,
         expected_items,
         latitude,
-        longitude
+        longitude,
+        delivery_date,
+        delivery_type,
+        return_delivery_date,
+        return_time_window
     } = req.body;
 
     if (!order_id || !client_name || !client_phone || !address) {
@@ -851,8 +930,8 @@ app.post('/api/webhook/order', async (req, res) => {
 
                 // Insertar/actualizar metadatos en nuestra DB local
                 appDb.run(`
-                    INSERT INTO delivery_metadata (order_id, time_window, expected_items, collected_items, latitude, longitude, delivery_date, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO delivery_metadata (order_id, time_window, expected_items, collected_items, latitude, longitude, delivery_date, updated_at, delivery_type, return_delivery_date, return_time_window)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(order_id) DO UPDATE SET
                         time_window = excluded.time_window,
                         expected_items = excluded.expected_items,
@@ -860,7 +939,10 @@ app.post('/api/webhook/order', async (req, res) => {
                         latitude = COALESCE(excluded.latitude, latitude),
                         longitude = COALESCE(excluded.longitude, longitude),
                         delivery_date = excluded.delivery_date,
-                        updated_at = excluded.updated_at
+                        updated_at = excluded.updated_at,
+                        delivery_type = excluded.delivery_type,
+                        return_delivery_date = excluded.return_delivery_date,
+                        return_time_window = excluded.return_time_window
                 `, [
                     order_id,
                     time_window || "10:00 - 12:00",
@@ -868,8 +950,11 @@ app.post('/api/webhook/order', async (req, res) => {
                     prendasEsperadas,
                     (latitude && !isFallbackCoordinate(latitude, longitude)) ? parseFloat(latitude) : null,
                     (longitude && !isFallbackCoordinate(latitude, longitude)) ? parseFloat(longitude) : null,
-                    getColombiaDateString(),
-                    nowEpoch
+                    delivery_date || getColombiaDateString(),
+                    nowEpoch,
+                    delivery_type || "RECOGIDA",
+                    return_delivery_date || null,
+                    return_time_window || null
                 ], async (err) => {
                     if (err) {
                         console.error("❌ [Webhook] Error al guardar metadatos en domiciliaria.db:", err.message);
@@ -1028,8 +1113,9 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     INSERT INTO delivery_metadata (
                         order_id, time_window, expected_items, collected_items, 
                         evidence_photo, signature_drawn, latitude, longitude, 
-                        delivery_date, items_comments, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        delivery_date, items_comments, updated_at, delivery_type, 
+                        return_delivery_date, return_time_window
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(order_id) DO UPDATE SET
                         time_window = excluded.time_window,
                         expected_items = excluded.expected_items,
@@ -1040,7 +1126,10 @@ app.post('/api/deliveries/sync', async (req, res) => {
                         longitude = COALESCE(excluded.longitude, longitude),
                         delivery_date = excluded.delivery_date,
                         items_comments = excluded.items_comments,
-                        updated_at = excluded.updated_at
+                        updated_at = excluded.updated_at,
+                        delivery_type = excluded.delivery_type,
+                        return_delivery_date = excluded.return_delivery_date,
+                        return_time_window = excluded.return_time_window
                 `, [
                     clientD.id,
                     clientD.time_window || "10:00 - 12:00",
@@ -1052,7 +1141,10 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     (clientD.longitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.longitude) : null,
                     clientD.order_date || getColombiaDateString(),
                     clientD.items_comments || null,
-                    nowEpoch
+                    nowEpoch,
+                    clientD.delivery_type || "RECOGIDA",
+                    clientD.return_delivery_date || null,
+                    clientD.return_time_window || null
                 ], (err) => {
                     if (err) {
                         console.error(`❌ Error guardando metadatos en domiciliaria.db para ${clientD.id}:`, err.message);
