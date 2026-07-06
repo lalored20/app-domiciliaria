@@ -1073,7 +1073,9 @@ app.post('/api/webhook/order', async (req, res) => {
                         collected_items: prendasEsperadas,
                         latitude: latitude ? parseFloat(latitude) : null,
                         longitude: longitude ? parseFloat(longitude) : null,
-                        delivery_date: getColombiaDateString()
+                        delivery_date: finalDeliveryDate,
+                        return_delivery_date: finalReturnDate,
+                        return_time_window: finalReturnTimeWindow
                     };
 
                     console.log("📦 [Webhook] Orden guardada en SQLite local (messages.db & domiciliaria.db).");
