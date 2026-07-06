@@ -500,10 +500,10 @@ function extraerFechaYHoraDelChat(transcription, createdEpoch) {
     const result = { date: null, timeWindow: null };
     if (!transcription) return result;
     
-    const dateMatch = transcription.match(/Recogida:\s*[^0-9\n\r]+?\s+(\d+)\s+de\s+([A-Za-záéíóúñ]+)/i);
+    const dateMatch = transcription.match(/Recogida[^*:\n\r]*[*:]?\s*([^0-9\n\r]+?)\s+(\d+)\s+de\s+([A-Za-záéíóúñ]+)/i);
     if (dateMatch) {
-        const day = parseInt(dateMatch[1]);
-        const monthStr = dateMatch[2].toLowerCase();
+        const day = parseInt(dateMatch[2]);
+        const monthStr = dateMatch[3].toLowerCase();
         
         const months = {
             "enero": "01", "feb": "02", "febrero": "02", "mar": "03", "marzo": "03", 
