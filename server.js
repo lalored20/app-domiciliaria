@@ -537,6 +537,86 @@ function extraerFechaYHoraDelChat(transcription, createdEpoch) {
     return result;
 }
 
+// Calcula de forma inteligente la fecha de entrega de prendas limpias (retorno)
+// basándose en el calendario semanal de rutas de la Macro-Zona y la transcripción del chat.
+function calcularFechaRetornoProgramada(recogidaDateStr, localidad, transcription) {
+    const defaultTurnaroundDays = 5;
+    
+    // Grupo A: Norte y Centro (Lunes=1, Miércoles=3, Viernes=5)
+    // Grupo B: Occidente y Sur (Martes=2, Jueves=4, Sábado=6)
+    const grupoA = ["Usaquén", "Suba", "Chapinero", "Teusaquillo", "Barrios Unidos"];
+    const grupoB = ["Kennedy", "Engativá", "Fontibón", "Puente Aranda", "Bosa", "Usme", "Ciudad Bolívar", "San Cristóbal", "Rafael Uribe"];
+    
+    const isGrupoB = grupoB.some(loc => localidad && localidad.toLowerCase().includes(loc.toLowerCase()));
+    const validDays = isGrupoB ? [2, 4, 6] : [1, 3, 5];
+    const defaultTimeWindow = isGrupoB ? "12:00 - 15:00" : "11:00 - 14:00";
+    
+    // 1. Intentar buscar un día de la semana específico en la transcripción
+    let targetDayOfWeek = null;
+    if (transcription) {
+        const text = transcription.toLowerCase();
+        if (/entregar.*?lunes|entrega.*?lunes|devolver.*?lunes|retorno.*?lunes/.test(text)) targetDayOfWeek = 1;
+        else if (/entregar.*?martes|entrega.*?martes|devolver.*?martes|retorno.*?martes/.test(text)) targetDayOfWeek = 2;
+        else if (/entregar.*?miércoles|entrega.*?miercoles|devolver.*?miércoles|retorno.*?miércoles/.test(text)) targetDayOfWeek = 3;
+        else if (/entregar.*?jueves|entrega.*?jueves|devolver.*?jueves|retorno.*?jueves/.test(text)) targetDayOfWeek = 4;
+        else if (/entregar.*?viernes|entrega.*?viernes|devolver.*?viernes|retorno.*?viernes/.test(text)) targetDayOfWeek = 5;
+        else if (/entregar.*?sábado|entrega.*?sabado|devolver.*?sábado|retorno.*?sábado/.test(text)) targetDayOfWeek = 6;
+    }
+    
+    // Parsear fecha base de recogida
+    let baseDate = new Date();
+    if (recogidaDateStr) {
+        const parts = recogidaDateStr.split('-');
+        if (parts.length === 3) {
+            const y = parseInt(parts[0]);
+            const m = parseInt(parts[1]) - 1;
+            const d = parseInt(parts[2]);
+            if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+                baseDate = new Date(y, m, d, 12, 0, 0);
+            }
+        }
+    }
+    
+    let returnDate = new Date(baseDate.getTime());
+    if (targetDayOfWeek !== null) {
+        // Buscar el siguiente día de la semana después de la recogida (mínimo 3 días de procesamiento)
+        returnDate.setDate(returnDate.getDate() + 3);
+        for (let i = 0; i < 7; i++) {
+            if (returnDate.getDay() === targetDayOfWeek) {
+                break;
+            }
+            returnDate.setDate(returnDate.getDate() + 1);
+        }
+    } else {
+        // Por defecto: Sumar 5 días
+        returnDate.setDate(returnDate.getDate() + defaultTurnaroundDays);
+        // Ajustar al día de ruta válido más cercano para su macro-zona
+        for (let i = 0; i < 7; i++) {
+            if (validDays.includes(returnDate.getDay())) {
+                break;
+            }
+            returnDate.setDate(returnDate.getDate() + 1);
+        }
+    }
+    
+    const yyyy = returnDate.getFullYear();
+    const mm = String(returnDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(returnDate.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    
+    let timeWindow = defaultTimeWindow;
+    if (transcription) {
+        const text = transcription.toLowerCase();
+        if (/tarde|14:00|16:00|2:\s*00|4:\s*00/.test(text)) {
+            timeWindow = isGrupoB ? "12:00 - 15:00" : "11:00 - 14:00";
+        } else if (/mañana|temprano|8:\s*00|9:\s*00|10:\s*00|11:\s*00/.test(text)) {
+            timeWindow = isGrupoB ? "09:00 - 12:00" : "08:00 - 11:00";
+        }
+    }
+    
+    return { date: dateStr, timeWindow };
+}
+
 
 // Helper to get merged deliveries from SQLite databases
 function getMergedDeliveries() {
@@ -851,6 +931,8 @@ app.post('/api/webhook/order', async (req, res) => {
         return_time_window
     } = req.body;
 
+    const chatTranscriptionInput = req.body.chat_transcription || req.body.chatTranscription || null;
+
     if (!order_id || !client_name || !client_phone || !address) {
         console.error("❌ [Webhook] Error: Faltan campos requeridos.");
         return res.status(400).json({
@@ -859,11 +941,33 @@ app.post('/api/webhook/order', async (req, res) => {
         });
     }
 
-    const localidad = detectarLocalidad(address);
+    const localidad = detectarLocalidad(address, latitude, longitude);
     const prendasEsperadas = parseInt(expected_items) || 1;
     const nowEpoch = Math.floor(Date.now() / 1000);
     const payStatus = pay_method === 'Pagado (Online)' || pay_method === 'PAGADO' ? 'PAGADO' : 'PENDIENTE';
     const paidAmt = payStatus === 'PAGADO' ? parseFloat(amount) || 0 : 0;
+
+    // Extraer fecha y hora por IA parsing del chat si no están estructuradas
+    let parsedDate = null;
+    let parsedTimeWindow = null;
+    if (chatTranscriptionInput) {
+        const parsed = extraerFechaYHoraDelChat(chatTranscriptionInput, nowEpoch);
+        parsedDate = parsed.date;
+        parsedTimeWindow = parsed.timeWindow;
+    }
+
+    const finalDeliveryDate = delivery_date || parsedDate || getColombiaDateString();
+    const finalTimeWindow = time_window || parsedTimeWindow || "10:00 - 12:00";
+
+    // Calcular fecha y franja de retorno automáticamente si no están definidas
+    let finalReturnDate = return_delivery_date || null;
+    let finalReturnTimeWindow = return_time_window || null;
+    if (!finalReturnDate) {
+        const calculated = calcularFechaRetornoProgramada(finalDeliveryDate, localidad, chatTranscriptionInput);
+        finalReturnDate = calculated.date;
+        finalReturnTimeWindow = calculated.timeWindow;
+        console.log(`🤖 [Webhook] Retorno autoprogramado para ${client_name}: ${finalReturnDate} (${finalReturnTimeWindow})`);
+    }
 
     // Obtener el siguiente número de ticket
     chatbotDb.get("SELECT MAX(ticketNumber) as maxTicket FROM local_orders", [], (err, row) => {
@@ -872,8 +976,8 @@ app.post('/api/webhook/order', async (req, res) => {
         chatbotDb.serialize(() => {
             // Insertar/actualizar orden en local_orders
             chatbotDb.run(`
-                INSERT INTO local_orders (id, ticketNumber, status, location, totalValue, paidAmount, paymentStatus, scheduledDate, clientName, clientPhone, clientAddress, created_at, updated_at)
-                VALUES (?, ?, 'PENDIENTE', 'RECEPCION', ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+                INSERT INTO local_orders (id, ticketNumber, status, location, totalValue, paidAmount, paymentStatus, scheduledDate, clientName, clientPhone, clientAddress, created_at, updated_at, chatTranscription)
+                VALUES (?, ?, 'PENDIENTE', 'RECEPCION', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET 
                     totalValue = excluded.totalValue,
                     paidAmount = excluded.paidAmount,
@@ -881,6 +985,7 @@ app.post('/api/webhook/order', async (req, res) => {
                     clientName = excluded.clientName,
                     clientPhone = excluded.clientPhone,
                     clientAddress = excluded.clientAddress,
+                    chatTranscription = COALESCE(excluded.chatTranscription, chatTranscription),
                     updated_at = excluded.updated_at
             `, [
                 order_id,
@@ -892,7 +997,8 @@ app.post('/api/webhook/order', async (req, res) => {
                 client_phone,
                 address,
                 nowEpoch,
-                nowEpoch
+                nowEpoch,
+                chatTranscriptionInput
             ], async function(err) {
                 if (err) {
                     console.error("❌ [Webhook] Error al insertar en local_orders:", err.message);
@@ -936,16 +1042,16 @@ app.post('/api/webhook/order', async (req, res) => {
                         return_time_window = excluded.return_time_window
                 `, [
                     order_id,
-                    time_window || "10:00 - 12:00",
+                    finalTimeWindow,
                     prendasEsperadas,
                     prendasEsperadas,
                     (latitude && !isFallbackCoordinate(latitude, longitude)) ? parseFloat(latitude) : null,
                     (longitude && !isFallbackCoordinate(latitude, longitude)) ? parseFloat(longitude) : null,
-                    delivery_date || getColombiaDateString(),
+                    finalDeliveryDate,
                     nowEpoch,
                     delivery_type || "RECOGIDA",
-                    return_delivery_date || null,
-                    return_time_window || null
+                    finalReturnDate,
+                    finalReturnTimeWindow
                 ], async (err) => {
                     if (err) {
                         console.error("❌ [Webhook] Error al guardar metadatos en domiciliaria.db:", err.message);
@@ -1392,7 +1498,7 @@ function startBackgroundGeocoding() {
             const geocodedIds = metaRows ? metaRows.map(r => r.order_id) : [];
             
             // 2. Buscar una orden en local_orders (chatbot db) que no esté en la lista de geocodificados
-                        let query = `SELECT id, clientPhone, clientAddress, scheduledDate FROM local_orders`;
+                        let query = `SELECT id, clientPhone, clientAddress, scheduledDate, chatTranscription FROM local_orders`;
             let params = [];
             
             if (geocodedIds.length > 0) {
@@ -1429,7 +1535,8 @@ function startBackgroundGeocoding() {
                                 appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', nowEpoch, orderToGeocode.id]);
                             } else {
                                 const finalDate = orderToGeocode.scheduledDate || getColombiaDateString();
-                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', finalDate, nowEpoch]);
+                                const returnSched = calcularFechaRetornoProgramada(finalDate, 'Usaquén', orderToGeocode.chatTranscription);
+                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', finalDate, nowEpoch, returnSched.date, returnSched.timeWindow]);
                             }
                         });
                         return;
@@ -1471,7 +1578,8 @@ function startBackgroundGeocoding() {
                                     appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [lat, lon, resolvedAddress, resolvedLocalidad, nowEpoch, orderToGeocode.id]);
                                 } else {
                                     const finalDate = orderToGeocode.scheduledDate || getColombiaDateString();
-                                    appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, lat, lon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch]);
+                                    const returnSched = calcularFechaRetornoProgramada(finalDate, resolvedLocalidad, orderToGeocode.chatTranscription);
+                                    appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, lat, lon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch, returnSched.date, returnSched.timeWindow]);
                                 }
                             });
                         });
@@ -1509,7 +1617,8 @@ function startBackgroundGeocoding() {
                                 });
                             } else {
                                 const finalDate = orderToGeocode.scheduledDate || getColombiaDateString();
-                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch], (err) => {
+                                const returnSched = calcularFechaRetornoProgramada(finalDate, resolvedLocalidad, orderToGeocode.chatTranscription);
+                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch, returnSched.date, returnSched.timeWindow], (err) => {
                                     if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
                                 });
                             }
@@ -1536,7 +1645,7 @@ function startBackgroundGeocoding() {
                         const similarIds = similarOrders.map(so => so.id);
                         const placeholders = similarIds.map(() => '?').join(',');
                         appDb.get(`
-                            SELECT latitude, longitude, resolved_address, resolved_localidad, evidence_photo 
+                            SELECT latitude, longitude, resolved_address, resolved_localidad, evidence_photo, return_delivery_date, return_time_window 
                             FROM delivery_metadata 
                             WHERE order_id IN (${placeholders}) AND latitude IS NOT NULL 
                             ORDER BY updated_at DESC LIMIT 1
@@ -1544,12 +1653,13 @@ function startBackgroundGeocoding() {
                             if (!err && historicalMeta) {
                                 const nowEpoch = Math.floor(Date.now() / 1000);
                                 const finalDate = order.scheduledDate || getColombiaDateString();
+                                const returnSched = calcularFechaRetornoProgramada(finalDate, historicalMeta.resolved_localidad, order.chatTranscription);
                                 
                                 appDb.run(`
                                     INSERT INTO delivery_metadata (
                                         order_id, latitude, longitude, resolved_address, resolved_localidad, 
-                                        evidence_photo, delivery_date, updated_at
-                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                        evidence_photo, delivery_date, updated_at, return_delivery_date, return_time_window
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 `, [
                                     order.id, 
                                     historicalMeta.latitude, 
@@ -1558,7 +1668,9 @@ function startBackgroundGeocoding() {
                                     historicalMeta.resolved_localidad, 
                                     historicalMeta.evidence_photo, 
                                     finalDate, 
-                                    nowEpoch
+                                    nowEpoch,
+                                    historicalMeta.return_delivery_date || returnSched.date,
+                                    historicalMeta.return_time_window || returnSched.timeWindow
                                 ], (err) => {
                                     if (err) {
                                         console.error("❌ [Geocoder] Error al insertar coordenadas históricas:", err.message);
