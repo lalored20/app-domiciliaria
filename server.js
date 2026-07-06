@@ -635,30 +635,21 @@ function getMergedDeliveries() {
                         
                         const expectedItems = meta.expected_items !== undefined ? meta.expected_items : (o.items_count || 1);
                         
+                        // Extraer fecha y hora por IA parsing del chat si no están estructuradas
+                        let parsedDate = null;
+                        let parsedTimeWindow = null;
+                        if (!meta.delivery_date && !o.scheduledDate && o.chatTranscription) {
+                            const parsed = extraerFechaYHoraDelChat(o.chatTranscription, o.created_at);
+                            parsedDate = parsed.date;
+                            parsedTimeWindow = parsed.timeWindow;
+                        }
+
+                        const finalOrderDate = meta.delivery_date || o.scheduledDate || parsedDate || dateStr;
+                        const finalTimeWindow = meta.time_window || parsedTimeWindow || "10:00 - 12:00";
+
                         return {
                             id: o.id,
                             chatbot_order_id: o.id,
-                            ticket_number: o.ticketNumber,
-                            client_name: o.clientName,
-                            client_phone: phoneKey,
-                            address: finalResolvedAddress,
-                            raw_address: o.clientAddress,
-                            localidad: finalResolvedLocalidad,
-                            // Extraer fecha y hora por IA parsing del chat si no están estructuradas
-                            let parsedDate = null;
-                            let parsedTimeWindow = null;
-                            if (!meta.delivery_date && !o.scheduledDate && o.chatTranscription) {
-                                const parsed = extraerFechaYHoraDelChat(o.chatTranscription, o.created_at);
-                                parsedDate = parsed.date;
-                                parsedTimeWindow = parsed.timeWindow;
-                            }
-
-                            const finalOrderDate = meta.delivery_date || o.scheduledDate || parsedDate || dateStr;
-                            const finalTimeWindow = meta.time_window || parsedTimeWindow || "10:00 - 12:00";
-
-                            return {
-                                id: o.id,
-                                chatbot_order_id: o.id,
                                 ticket_number: o.ticketNumber,
                                 client_name: o.clientName,
                                 client_phone: phoneKey,
