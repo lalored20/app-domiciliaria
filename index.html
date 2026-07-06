@@ -2,6 +2,9 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <script>
         (function() {
             var errorCount = 0;
@@ -28,6 +31,27 @@
                 sendLog('REJECTION', r ? (r.message || String(r)) : 'unknown');
             };
         })();
+        
+        // 💥 AUTO-DESTRUCCIÓN DEL SERVICE WORKER (Anti-Caché) 💥
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    registration.unregister();
+                    console.log('💥 ServiceWorker eliminado.');
+                }
+            }).catch(function(err) {
+                console.log('Error eliminando ServiceWorker: ', err);
+            });
+            // También limpiar caches de la API Cache
+            if ('caches' in window) {
+                caches.keys().then(function(names) {
+                    for (let name of names) {
+                        caches.delete(name);
+                        console.log('💥 Caché ' + name + ' destruida.');
+                    }
+                });
+            }
+        }
     </script>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
@@ -47,7 +71,7 @@
     <script src="supabase.min.js"></script>
     
     <!-- Enlace a estilos unificados -->
-    <link rel="stylesheet" href="styles.css?v=1.0.52">
+    <link rel="stylesheet" href="styles.css?v=1.0.53">
 </head>
 <body class="theme-dark">
 
@@ -236,10 +260,56 @@
             </div>
         </div>
 
+        <!-- Modal de Planificación de Ruta y Retorno -->
+        <div class="modal" id="planning-modal" style="display: none;">
+            <div class="modal-content" style="max-height: 80vh; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                    <h2 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--primary);">⚙️ Planificación Logística</h2>
+                    <span style="font-size: 20px; cursor: pointer; color: var(--text-muted); font-weight: bold;" onclick="closePlanningModal()">×</span>
+                </div>
+                <div style="overflow-y: auto; flex: 1; padding: 15px 0; display: flex; flex-direction: column; gap: 12px;" id="planning-modal-body">
+                    <div>
+                        <div style="font-weight: 700; font-size: 14px; color: var(--text-main);" id="planning-client-name">Cliente</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" id="planning-client-address">Dirección</div>
+                    </div>
+                    
+                    <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border); padding: 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 10px;">
+                        <div>
+                            <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">ETAPA ACTUAL:</label>
+                            <select id="planning-delivery-type" style="font-size: 12px; padding: 6px; width: 100%; height: 32px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: var(--text-main); font-weight: 600;">
+                                <option value="RECOGIDA">📥 RECOGIDA (Prendas Sucias)</option>
+                                <option value="ENTREGA">📤 ENTREGA (Prendas Limpias)</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">FECHA PACTADA DE ENTREGA (RETORNO):</label>
+                            <input type="date" id="planning-return-date" style="font-size: 12px; padding: 6px 8px; width: 100%; height: 32px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: var(--text-main); font-family: inherit;">
+                        </div>
+                        
+                        <div>
+                            <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px;">BLOQUE HORARIO DE ENTREGA:</label>
+                            <select id="planning-return-window" style="font-size: 12px; padding: 6px; width: 100%; height: 32px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; color: var(--text-main);">
+                                <option value="">Seleccione franja...</option>
+                                <option value="08:00 - 11:00">08:00 - 11:00 (Norte/Centro - Lun/Mié/Vie)</option>
+                                <option value="11:00 - 14:00">11:00 - 14:00 (Norte/Centro - Lun/Mié/Vie)</option>
+                                <option value="09:00 - 12:00">09:00 - 12:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
+                                <option value="12:00 - 15:00">12:00 - 15:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-buttons" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 0; display: flex; gap: 8px;">
+                    <button class="btn btn-cancel" onclick="closePlanningModal()" style="flex: 1; margin: 0;">Cancelar</button>
+                    <button class="btn btn-confirm" id="planning-save-btn" style="flex: 1; margin: 0; font-weight: 700;">💾 Guardar</button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
-    <!-- Enlace a la lógica core de la aplicación -->
-    <script src="app.js?v=1.0.52"></script>
+    <!-- Enlace a la lógica core de la aplicación (Anti-Caché) -->
+    <script>document.write('<scr'+'ipt src="app.js?v=' + Date.now() + '"><\/scr'+'ipt>');</script>
     <script>
         // Actualizar hora del dispositivo dinámicamente
         function updateTime() {

@@ -1083,17 +1083,19 @@ app.post('/api/deliveries/sync', async (req, res) => {
     // Procesar cada entrega de forma secuencial en SQLite
     const promises = clientDeliveries.map(clientD => {
         return new Promise((resolve) => {
+            const clientUpdatedAt = clientD.status_updated_at || nowEpoch;
             // 1. Actualizar el estado y el monto cobrado (totalValue) en el chatbot's messages.db
             chatbotDb.run(`
                 UPDATE local_orders 
                 SET status = ?, totalValue = ?, updated_at = ? 
-                WHERE id = ? OR ticketNumber = ?
+                WHERE (id = ? OR ticketNumber = ?) AND (? >= updated_at OR updated_at IS NULL)
             `, [
                 clientD.status,
                 clientD.amount || 0,
-                nowEpoch,
+                clientUpdatedAt,
                 clientD.id,
-                clientD.id.replace('QR-ORQUIDEAS-', '')
+                clientD.id.replace('QR-ORQUIDEAS-', ''),
+                clientUpdatedAt
             ], (err) => {
                 if (err) {
                     console.error(`❌ Error actualizando estado en messages.db para ${clientD.id}:`, err.message);
@@ -1111,16 +1113,17 @@ app.post('/api/deliveries/sync', async (req, res) => {
                         time_window = excluded.time_window,
                         expected_items = excluded.expected_items,
                         collected_items = excluded.collected_items,
-                        evidence_photo = COALESCE(excluded.evidence_photo, evidence_photo),
+                        evidence_photo = COALESCE(excluded.evidence_photo, delivery_metadata.evidence_photo),
                         signature_drawn = excluded.signature_drawn,
-                        latitude = COALESCE(excluded.latitude, latitude),
-                        longitude = COALESCE(excluded.longitude, longitude),
+                        latitude = COALESCE(excluded.latitude, delivery_metadata.latitude),
+                        longitude = COALESCE(excluded.longitude, delivery_metadata.longitude),
                         delivery_date = excluded.delivery_date,
                         items_comments = excluded.items_comments,
                         updated_at = excluded.updated_at,
                         delivery_type = excluded.delivery_type,
                         return_delivery_date = excluded.return_delivery_date,
                         return_time_window = excluded.return_time_window
+                    WHERE excluded.updated_at >= delivery_metadata.updated_at OR delivery_metadata.updated_at IS NULL
                 `, [
                     clientD.id,
                     clientD.time_window || "10:00 - 12:00",
@@ -1132,7 +1135,7 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     (clientD.longitude && !isFallbackCoordinate(clientD.latitude, clientD.longitude)) ? parseFloat(clientD.longitude) : null,
                     clientD.order_date || getColombiaDateString(),
                     clientD.items_comments || null,
-                    nowEpoch,
+                    clientUpdatedAt,
                     clientD.delivery_type || "RECOGIDA",
                     clientD.return_delivery_date || null,
                     clientD.return_time_window || null

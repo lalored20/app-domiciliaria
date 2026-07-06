@@ -884,19 +884,29 @@ function createDeliveryCard(d) {
             <a class="btn btn-call" href="tel:${d.client_phone}">
                 📞 Llamar
             </a>
+            <button class="btn" onclick="openPlanningModal('${mainId}')" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); color: #a78bfa; font-weight: 700; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(139, 92, 246, 0.2)'" onmouseout="this.style.background='rgba(139, 92, 246, 0.1)'">
+                ⚙️ Planificar
+            </button>
             ${startButton}
         `;
         card.appendChild(actions);
     } else {
         const confirmationDetails = document.createElement("div");
-        confirmationDetails.style.cssText = "font-size:12px; color:var(--success); border-top:1px solid var(--border); padding-top:10px; margin-top:4px; display:flex; justify-content:space-between;";
+        confirmationDetails.style.cssText = "font-size:12px; color:var(--success); border-top:1px solid var(--border); padding-top:10px; margin-top:4px;";
         let qrLabel = "";
         if (d.qr_code && typeof d.qr_code === 'string') {
-            qrLabel = `<span>Prenda: ${escapeHtml(d.qr_code.split('-').pop())}</span>`;
+            qrLabel = `<span style="color:var(--text-muted);">Prenda: ${escapeHtml(d.qr_code.split('-').pop())}</span>`;
+        }
+        let undoBtn = "";
+        if (d.delivery_type === "RECOGIDA") {
+            undoBtn = `<div style="margin-top:6px;"><button onclick="undoRecibido('${d.id}')" style="background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); padding:5px 10px; border-radius:6px; font-size:10px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">↩️ Deshacer Recibido</button></div>`;
         }
         confirmationDetails.innerHTML = `
-            <span>✅ Entregado exitosamente</span>
-            ${qrLabel}
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span>✅ Entregado exitosamente</span>
+                ${qrLabel}
+            </div>
+            ${undoBtn}
         `;
         card.appendChild(confirmationDetails);
     }
@@ -1401,10 +1411,12 @@ async function startRoute(id) {
     const ids = id.split(',');
     const mainId = ids[0];
     
+    const nowEpoch = Math.floor(Date.now() / 1000);
     // Poner todas las demás entregas activas a PENDIENTE
     deliveries.forEach(d => {
         if (d.status === "EN_RUTA" && !ids.includes(d.id)) {
             d.status = "PENDIENTE";
+            d.status_updated_at = nowEpoch;
             d.sync_pending = true;
         }
     });
@@ -1415,6 +1427,7 @@ async function startRoute(id) {
         const delivery = deliveries.find(d => d.id === currentId);
         if (delivery) {
             delivery.status = "EN_RUTA";
+            delivery.status_updated_at = nowEpoch;
             delivery.sync_pending = true;
             clientName = delivery.client_name;
         }
@@ -2805,43 +2818,17 @@ function openChatTranscriptionModal(id) {
     const summaryBoxHtml = `
         <div class="summary-route-box" style="padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: var(--text-main); line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
             
-            <!-- Sección: Planificación de Entrega y Retorno (Editable) -->
+            <!-- Sección: Planificación de Entrega y Retorno -->
             <div style="border-bottom: 1px dashed var(--border); padding-bottom: 8px;">
                 <div style="font-weight: 700; color: var(--primary); font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">📍 PLANIFICACIÓN DE ETAPAS (RECOGIDA / RETORNO)</div>
                 <div><strong>Dirección de entrega:</strong> ${formatShortAddress(d.address)}</div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px;"><strong>Original escrita:</strong> "${escapeHtml(d.raw_address || d.address)}"</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px; margin-bottom: 6px;"><strong>Original escrita:</strong> "${escapeHtml(d.raw_address || d.address)}"</div>
                 ${routingHtml}
                 
-                <div class="planning-controls" style="background: rgba(255,255,255,0.01); border: 1px solid var(--border); padding: 10px; border-radius: 8px; margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
-                    <div style="font-weight: 700; font-size: 10.5px; color: var(--text-main); margin-bottom: 2px; display: flex; align-items: center; gap: 4px;">⚙️ CONTROL LOGÍSTICO:</div>
-                    
-                    <div>
-                        <label style="font-size: 9px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">ETAPA ACTUAL:</label>
-                        <select id="edit-delivery-type-${d.id}" style="font-size: 11px; padding: 4px; width: 100%; height: 28px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 5px; color: var(--text-main); font-weight: 600;">
-                            <option value="RECOGIDA" ${d.delivery_type !== 'ENTREGA' ? 'selected' : ''}>📥 RECOGIDA (Prendas Sucias)</option>
-                            <option value="ENTREGA" ${d.delivery_type === 'ENTREGA' ? 'selected' : ''}>📤 ENTREGA (Prendas Limpias)</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label style="font-size: 9px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">FECHA PACTADA DE ENTREGA (RETORNO):</label>
-                        <input type="date" id="edit-return-date-${d.id}" value="${d.return_delivery_date || ''}" style="font-size: 11px; padding: 4px 8px; width: 100%; height: 28px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 5px; color: var(--text-main); font-family: inherit;">
-                    </div>
-                    
-                    <div>
-                        <label style="font-size: 9px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">BLOQUE HORARIO DE ENTREGA:</label>
-                        <select id="edit-return-window-${d.id}" style="font-size: 11px; padding: 4px; width: 100%; height: 28px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 5px; color: var(--text-main);">
-                            <option value="" ${!d.return_time_window ? 'selected' : ''}>Seleccione franja...</option>
-                            <option value="08:00 - 11:00" ${d.return_time_window === '08:00 - 11:00' ? 'selected' : ''}>08:00 - 11:00 (Norte/Centro - Lun/Mié/Vie)</option>
-                            <option value="11:00 - 14:00" ${d.return_time_window === '11:00 - 14:00' ? 'selected' : ''}>11:00 - 14:00 (Norte/Centro - Lun/Mié/Vie)</option>
-                            <option value="09:00 - 12:00" ${d.return_time_window === '09:00 - 12:00' ? 'selected' : ''}>09:00 - 12:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
-                            <option value="12:00 - 15:00" ${d.return_time_window === '12:00 - 15:00' ? 'selected' : ''}>12:00 - 15:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
-                        </select>
-                    </div>
-                    
-                    <button class="btn btn-confirm" onclick="saveDeliveryPlanning('${d.id}')" style="padding: 6px; font-size: 10.5px; font-weight: 700; width: 100%; text-align: center; margin-top: 4px; border-radius: 5px; height: 30px;">
-                        💾 Guardar Planificación de Entrega
-                    </button>
+                <div style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); padding: 8px 12px; border-radius: 8px; margin-top: 8px; font-size: 11px; display: flex; flex-direction: column; gap: 4px;">
+                    <div><strong>Etapa actual:</strong> <span style="color: var(--primary); font-weight: 700;">${d.delivery_type === 'ENTREGA' ? '📤 ENTREGA (Prendas Limpias)' : '📥 RECOGIDA (Prendas Sucias)'}</span></div>
+                    <div><strong>Fecha pactada de retorno:</strong> <span style="font-weight: 700;">${d.return_delivery_date || 'No programada'}</span></div>
+                    <div><strong>Bloque horario:</strong> <span style="font-weight: 700;">${d.return_time_window || 'No seleccionado'}</span></div>
                 </div>
             </div>
 
@@ -2894,19 +2881,34 @@ function closeChatDetailsModal() {
     document.getElementById('chat-details-modal').style.display = 'none';
 }
 
+function openPlanningModal(id) {
+    const d = deliveries.find(item => item.id === id);
+    if (!d) return;
+    
+    document.getElementById('planning-client-name').textContent = d.client_name;
+    document.getElementById('planning-client-address').textContent = d.address;
+    
+    document.getElementById('planning-delivery-type').value = d.delivery_type || 'RECOGIDA';
+    document.getElementById('planning-return-date').value = d.return_delivery_date || '';
+    document.getElementById('planning-return-window').value = d.return_time_window || '';
+    
+    const saveBtn = document.getElementById('planning-save-btn');
+    saveBtn.onclick = () => saveDeliveryPlanning(id);
+    
+    document.getElementById('planning-modal').style.display = 'flex';
+}
+
+function closePlanningModal() {
+    document.getElementById('planning-modal').style.display = 'none';
+}
+
 async function saveDeliveryPlanning(id) {
     const d = deliveries.find(item => item.id === id);
     if (!d) return;
     
-    const selectType = document.getElementById(`edit-delivery-type-${id}`);
-    const inputReturnDate = document.getElementById(`edit-return-date-${id}`);
-    const selectReturnWindow = document.getElementById(`edit-return-window-${id}`);
-    
-    if (!selectType) return;
-    
-    const newType = selectType.value;
-    const newReturnDate = inputReturnDate ? inputReturnDate.value : null;
-    const newReturnWindow = selectReturnWindow ? selectReturnWindow.value : null;
+    const newType = document.getElementById('planning-delivery-type').value;
+    const newReturnDate = document.getElementById('planning-return-date').value || null;
+    const newReturnWindow = document.getElementById('planning-return-window').value || null;
     
     d.delivery_type = newType;
     d.return_delivery_date = newReturnDate;
@@ -2933,14 +2935,28 @@ async function saveDeliveryPlanning(id) {
     }
     
     alert("✅ Planificación de entrega guardada correctamente.");
-    closeChatDetailsModal();
+    closePlanningModal();
     renderContent();
     
     // Lanzar sincronización en segundo plano de inmediato
     syncDataOffline();
 }
 
+let _isConfirmingDelivery = false;
 async function confirmDelivery() {
+    // Anti-doble-click: bloquear si ya está procesando
+    if (_isConfirmingDelivery) return;
+    _isConfirmingDelivery = true;
+    
+    const completeBtn = document.getElementById("btn-complete-delivery");
+    if (completeBtn) {
+        completeBtn.disabled = true;
+        completeBtn.textContent = "Procesando...";
+        completeBtn.style.opacity = "0.5";
+        completeBtn.style.pointerEvents = "none";
+    }
+    
+    try {
     const ids = currentActiveDeliveryId.split(',');
     const mainId = ids[0];
     
@@ -2950,8 +2966,10 @@ async function confirmDelivery() {
         let lng = null;
         
         const applyConfirmation = async () => {
+            const nowEpoch = Math.floor(Date.now() / 1000);
             deliveriesToConfirm.forEach(d => {
                 d.status = "ENTREGADO";
+                d.status_updated_at = nowEpoch;
                 d.evidence_photo = JSON.stringify(capturedPhotosList);
                 d.signature_drawn = true;
                 
@@ -3036,6 +3054,39 @@ async function confirmDelivery() {
         } else {
             await applyConfirmation();
         }
+    }
+    } finally {
+        _isConfirmingDelivery = false;
+    }
+}
+
+async function undoRecibido(id) {
+    if (confirm("¿Estás seguro de deshacer este recibido? Volverá al estado pendiente.")) {
+        const d = deliveries.find(x => x.id === id);
+        if (!d) return;
+        
+        const nowEpoch = Math.floor(Date.now() / 1000);
+        d.status = "PENDIENTE";
+        d.status_updated_at = nowEpoch;
+        d.sync_pending = true;
+        
+        // Cancelar la entrega de retorno programada (mismo order_id)
+        if (d.order_id) {
+            const returnDelivery = deliveries.find(x => x.order_id === d.order_id && x.id !== d.id && x.delivery_type === "ENTREGA" && x.status === "PENDIENTE");
+            if (returnDelivery) {
+                returnDelivery.status = "CANCELADO";
+                returnDelivery.status_updated_at = nowEpoch;
+                returnDelivery.sync_pending = true;
+            }
+        }
+        
+        await saveDeliveries();
+        recalculateShiftCash();
+        renderLocalidades();
+        renderContent();
+        triggerBackgroundSync();
+        
+        alert("✅ Recibido deshecho exitosamente.");
     }
 }
 
