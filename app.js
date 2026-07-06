@@ -811,7 +811,11 @@ function createDeliveryCard(d) {
             <div class="status-pill ${statusClass}">${statusLabel}</div>
         </div>
         
-        <div class="card-meta-row" style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; padding: 0 4px;">
+        <div class="card-meta-row" style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; padding: 0 4px; flex-wrap: wrap;">
+            ${d.delivery_type === 'ENTREGA' 
+                ? `<span class="type-badge" style="background: rgba(59, 130, 246, 0.08); color: #3b82f6; font-size: 10px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.2); white-space: nowrap; display: inline-flex; align-items: center; gap: 2px;">📤 ENTREGA</span>`
+                : `<span class="type-badge" style="background: rgba(245, 158, 11, 0.08); color: #f59e0b; font-size: 10px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.2); white-space: nowrap; display: inline-flex; align-items: center; gap: 2px;">📥 RECOGIDA</span>`
+            }
             ${d.localidad ? `<span class="locality-badge" style="background: rgba(16, 185, 129, 0.08); color: #10b981; font-size: 10px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.2); white-space: nowrap; display: inline-flex; align-items: center; gap: 2px;">📍 ${d.localidad}</span>` : ''}
             ${d.ticket_number ? `<span class="ticket-badge" style="background: rgba(139, 92, 246, 0.08); color: var(--primary); font-size: 10px; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(139, 92, 246, 0.2); white-space: nowrap; display: inline-flex; align-items: center; gap: 2px;">🎟️ #${d.ticket_number}</span>` : ''}
         </div>
@@ -832,6 +836,11 @@ function createDeliveryCard(d) {
                     ${formatShortAddress(d.address)}
                 </span>
             </div>
+            ${d.return_delivery_date ? `
+                <div class="return-schedule-badge" style="font-size: 10px; font-weight: 700; color: #5cd4ff; background: rgba(92, 212, 255, 0.05); border: 1px solid rgba(92, 212, 255, 0.15); padding: 4px 8px; border-radius: 6px; margin-top: 6px; display: flex; align-items: center; gap: 4px; line-height: 1.2;">
+                    🔄 ENTREGA PACTADA: ${d.return_delivery_date} (${d.return_time_window || 'Sin franja'})
+                </div>
+            ` : ''}
             ${facadePillHtml}
         </div>
         <div class="price-row">
@@ -2796,12 +2805,44 @@ function openChatTranscriptionModal(id) {
     const summaryBoxHtml = `
         <div class="summary-route-box" style="padding: 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; color: var(--text-main); line-height: 1.5; display: flex; flex-direction: column; gap: 10px;">
             
-            <!-- Sección: Planificación de Entrega -->
+            <!-- Sección: Planificación de Entrega y Retorno (Editable) -->
             <div style="border-bottom: 1px dashed var(--border); padding-bottom: 8px;">
-                <div style="font-weight: 700; color: var(--primary); font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">📍 PLANIFICACIÓN DE ENTREGA</div>
+                <div style="font-weight: 700; color: var(--primary); font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">📍 PLANIFICACIÓN DE ETAPAS (RECOGIDA / RETORNO)</div>
                 <div><strong>Dirección de entrega:</strong> ${formatShortAddress(d.address)}</div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;"><strong>Original escrita:</strong> "${escapeHtml(d.raw_address || d.address)}"</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px; margin-bottom: 8px;"><strong>Original escrita:</strong> "${escapeHtml(d.raw_address || d.address)}"</div>
                 ${routingHtml}
+                
+                <div class="planning-controls" style="background: rgba(255,255,255,0.01); border: 1px solid var(--border); padding: 10px; border-radius: 8px; margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="font-weight: 700; font-size: 10.5px; color: var(--text-main); margin-bottom: 2px; display: flex; align-items: center; gap: 4px;">⚙️ CONTROL LOGÍSTICO:</div>
+                    
+                    <div>
+                        <label style="font-size: 9px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">ETAPA ACTUAL:</label>
+                        <select id="edit-delivery-type-${d.id}" style="font-size: 11px; padding: 4px; width: 100%; height: 28px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 5px; color: var(--text-main); font-weight: 600;">
+                            <option value="RECOGIDA" ${d.delivery_type !== 'ENTREGA' ? 'selected' : ''}>📥 RECOGIDA (Prendas Sucias)</option>
+                            <option value="ENTREGA" ${d.delivery_type === 'ENTREGA' ? 'selected' : ''}>📤 ENTREGA (Prendas Limpias)</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label style="font-size: 9px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">FECHA PACTADA DE ENTREGA (RETORNO):</label>
+                        <input type="date" id="edit-return-date-${d.id}" value="${d.return_delivery_date || ''}" style="font-size: 11px; padding: 4px 8px; width: 100%; height: 28px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 5px; color: var(--text-main); font-family: inherit;">
+                    </div>
+                    
+                    <div>
+                        <label style="font-size: 9px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 2px;">BLOQUE HORARIO DE ENTREGA:</label>
+                        <select id="edit-return-window-${d.id}" style="font-size: 11px; padding: 4px; width: 100%; height: 28px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 5px; color: var(--text-main);">
+                            <option value="" ${!d.return_time_window ? 'selected' : ''}>Seleccione franja...</option>
+                            <option value="08:00 - 11:00" ${d.return_time_window === '08:00 - 11:00' ? 'selected' : ''}>08:00 - 11:00 (Norte/Centro - Lun/Mié/Vie)</option>
+                            <option value="11:00 - 14:00" ${d.return_time_window === '11:00 - 14:00' ? 'selected' : ''}>11:00 - 14:00 (Norte/Centro - Lun/Mié/Vie)</option>
+                            <option value="09:00 - 12:00" ${d.return_time_window === '09:00 - 12:00' ? 'selected' : ''}>09:00 - 12:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
+                            <option value="12:00 - 15:00" ${d.return_time_window === '12:00 - 15:00' ? 'selected' : ''}>12:00 - 15:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn btn-confirm" onclick="saveDeliveryPlanning('${d.id}')" style="padding: 6px; font-size: 10.5px; font-weight: 700; width: 100%; text-align: center; margin-top: 4px; border-radius: 5px; height: 30px;">
+                        💾 Guardar Planificación de Entrega
+                    </button>
+                </div>
             </div>
 
             <!-- Sección: Prendas y Servicios -->
@@ -2851,6 +2892,52 @@ function openChatTranscriptionModal(id) {
 
 function closeChatDetailsModal() {
     document.getElementById('chat-details-modal').style.display = 'none';
+}
+
+async function saveDeliveryPlanning(id) {
+    const d = deliveries.find(item => item.id === id);
+    if (!d) return;
+    
+    const selectType = document.getElementById(`edit-delivery-type-${id}`);
+    const inputReturnDate = document.getElementById(`edit-return-date-${id}`);
+    const selectReturnWindow = document.getElementById(`edit-return-window-${id}`);
+    
+    if (!selectType) return;
+    
+    const newType = selectType.value;
+    const newReturnDate = inputReturnDate ? inputReturnDate.value : null;
+    const newReturnWindow = selectReturnWindow ? selectReturnWindow.value : null;
+    
+    d.delivery_type = newType;
+    d.return_delivery_date = newReturnDate;
+    d.return_time_window = newReturnWindow;
+    d.sync_pending = true;
+    
+    // Si el tipo cambia a ENTREGA, ajustamos la fecha activa de la orden para que se muestre en ese día de reparto
+    if (newType === 'ENTREGA' && newReturnDate) {
+        d.order_date = newReturnDate;
+        if (newReturnWindow) {
+            d.time_window = newReturnWindow;
+        }
+    }
+    
+    if (db) {
+        try {
+            await promiseWithTimeout(db.deliveries.put(d), 1000, "Timeout al guardar planificacion");
+            addSystemLog(`✅ Planificación guardada para ${d.client_name} (${newType})`);
+        } catch (e) {
+            console.error("Error al guardar planificación en Dexie:", e);
+        }
+    } else {
+        localStorage.setItem("deliveries", JSON.stringify(deliveries));
+    }
+    
+    alert("✅ Planificación de entrega guardada correctamente.");
+    closeChatDetailsModal();
+    renderContent();
+    
+    // Lanzar sincronización en segundo plano de inmediato
+    syncDataOffline();
 }
 
 async function confirmDelivery() {
@@ -3263,7 +3350,12 @@ async function runBackgroundSync() {
                                 localItem.collected_items !== serverD.collected_items ||
                                 (serverD.facade_photo && localItem.facade_photo !== serverD.facade_photo) ||
                                 (serverD.facade_latitude && localItem.facade_latitude !== serverD.facade_latitude) ||
-                                (serverD.facade_longitude && localItem.facade_longitude !== serverD.facade_longitude)
+                                (serverD.facade_photo && localItem.facade_photo !== serverD.facade_photo) ||
+                                (serverD.facade_latitude && localItem.facade_latitude !== serverD.facade_latitude) ||
+                                (serverD.facade_longitude && localItem.facade_longitude !== serverD.facade_longitude) ||
+                                localItem.delivery_type !== serverD.delivery_type ||
+                                localItem.return_delivery_date !== serverD.return_delivery_date ||
+                                localItem.return_time_window !== serverD.return_time_window
                             )) {
                                 localItem.client_phone = serverD.client_phone;
                                 localItem.latitude = serverD.latitude;
@@ -3272,6 +3364,9 @@ async function runBackgroundSync() {
                                 localItem.localidad = serverD.localidad;
                                 localItem.items_comments = serverD.items_comments;
                                 localItem.collected_items = serverD.collected_items;
+                                localItem.delivery_type = serverD.delivery_type;
+                                localItem.return_delivery_date = serverD.return_delivery_date;
+                                localItem.return_time_window = serverD.return_time_window;
                                 
                                 if (serverD.facade_photo) localItem.facade_photo = serverD.facade_photo;
                                 if (serverD.facade_latitude) localItem.facade_latitude = serverD.facade_latitude;
