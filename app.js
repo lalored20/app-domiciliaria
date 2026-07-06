@@ -2881,6 +2881,171 @@ function closeChatDetailsModal() {
     document.getElementById('chat-details-modal').style.display = 'none';
 }
 
+// Variables de estado del mini-calendario de planificación
+let planningCalMonth = null;
+let planningCalYear = null;
+let planningCalSelectedDate = null;
+
+function getLocalidadGroupInfo(localidad) {
+    if (!localidad) return { group: 'A', days: [1, 3, 5], label: 'Lun, Mié, Vie', defaultTime: '11:00 - 14:00' };
+    const clean = localidad.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    
+    const grupoA = ["usaquen", "suba", "chapinero", "teusaquillo", "barrios unidos"];
+    const grupoB = ["kennedy", "engativa", "fontibon", "puente aranda", "bosa", "usme", "ciudad bolivar", "san cristobal", "rafael uribe", "rafael uribe uribe"];
+    
+    if (grupoA.some(g => clean.includes(g))) {
+        return { group: 'A', days: [1, 3, 5], label: 'Lun, Mié, Vie', defaultTime: '11:00 - 14:00' };
+    }
+    if (grupoB.some(g => clean.includes(g))) {
+        return { group: 'B', days: [2, 4, 6], label: 'Mar, Jue, Sáb', defaultTime: '12:00 - 15:00' };
+    }
+    return { group: 'A', days: [1, 3, 5], label: 'Lun, Mié, Vie', defaultTime: '11:00 - 14:00' }; // default
+}
+
+function initPlanningCalendar(d) {
+    const defaultDate = d.return_delivery_date || d.order_date || new Date().toISOString().split('T')[0];
+    planningCalSelectedDate = defaultDate;
+    
+    const parts = defaultDate.split('-');
+    if (parts.length === 3) {
+        planningCalYear = parseInt(parts[0]);
+        planningCalMonth = parseInt(parts[1]) - 1;
+    } else {
+        const today = new Date();
+        planningCalYear = today.getFullYear();
+        planningCalMonth = today.getMonth();
+    }
+    
+    document.getElementById('planning-cal-prev-btn').onclick = (e) => {
+        e.preventDefault();
+        planningCalMonth--;
+        if (planningCalMonth < 0) {
+            planningCalMonth = 11;
+            planningCalYear--;
+        }
+        renderPlanningCalendarGrid(d);
+    };
+    
+    document.getElementById('planning-cal-next-btn').onclick = (e) => {
+        e.preventDefault();
+        planningCalMonth++;
+        if (planningCalMonth > 11) {
+            planningCalMonth = 0;
+            planningCalYear++;
+        }
+        renderPlanningCalendarGrid(d);
+    };
+    
+    renderPlanningCalendarGrid(d);
+}
+
+function renderPlanningCalendarGrid(d) {
+    const months = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ];
+    
+    document.getElementById('planning-cal-month-year').textContent = `${months[planningCalMonth]} ${planningCalYear}`;
+    
+    const info = getLocalidadGroupInfo(d.localidad);
+    document.getElementById('planning-cal-info-msg').innerHTML = `
+        📍 Zona: <strong>${d.localidad || 'General'} (Grupo ${info.group})</strong><br>
+        📅 Días recomendados: <strong>${info.label}</strong>
+    `;
+    
+    const grid = document.getElementById('planning-cal-days-grid');
+    grid.innerHTML = "";
+    
+    // Primer día del mes
+    const firstDay = new Date(planningCalYear, planningCalMonth, 1);
+    const startDayOfWeek = firstDay.getDay(); // 0: Dom, 1: Lun...
+    
+    // Cantidad de días en el mes
+    const daysInMonth = new Date(planningCalYear, planningCalMonth + 1, 0).getDate();
+    
+    // Cantidad de días en el mes anterior
+    const prevDaysInMonth = new Date(planningCalYear, planningCalMonth, 0).getDate();
+    
+    // Generar días del mes anterior para rellenar
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+        const dayNum = prevDaysInMonth - i;
+        const cell = document.createElement('div');
+        cell.textContent = dayNum;
+        cell.style.cssText = "font-size: 11px; padding: 6px 0; text-align: center; color: var(--text-muted); opacity: 0.25; pointer-events: none;";
+        grid.appendChild(cell);
+    }
+    
+    // Generar días del mes actual
+    for (let day = 1; day <= daysInMonth; day++) {
+        const cell = document.createElement('div');
+        cell.textContent = day;
+        
+        const dateStr = `${planningCalYear}-${String(planningCalMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayDate = new Date(planningCalYear, planningCalMonth, day);
+        const dayOfWeek = dayDate.getDay(); // 0 = Dom, 1 = Lun ...
+        
+        const isRecommended = info.days.includes(dayOfWeek);
+        const isSelected = dateStr === planningCalSelectedDate;
+        
+        let cellStyle = "font-size: 11px; padding: 6px 0; text-align: center; border-radius: 6px; cursor: pointer; position: relative; font-weight: 500; transition: all 0.15s; color: var(--text-main);";
+        
+        // Agregar indicador visual si es recomendado
+        let badgeDot = "";
+        if (isRecommended) {
+            cellStyle += " border: 1px dashed rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.05); color: #34d399;";
+            badgeDot = `<span style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background: #10b981; border-radius: 50%;"></span>`;
+        }
+        
+        if (isSelected) {
+            if (isRecommended) {
+                cellStyle += " background: #10b981 !important; color: #fff !important; font-weight: 700; border: 1px solid #10b981;";
+            } else {
+                cellStyle += " background: var(--primary) !important; color: #fff !important; font-weight: 700; border: 1px solid var(--primary);";
+            }
+        }
+        
+        cell.style.cssText = cellStyle;
+        if (badgeDot && !isSelected) {
+            cell.innerHTML = `${day}${badgeDot}`;
+        }
+        
+        cell.onclick = () => {
+            planningCalSelectedDate = dateStr;
+            document.getElementById('planning-return-date').value = dateStr;
+            
+            // Actualizar automáticamente la franja horaria recomendada
+            const winSelect = document.getElementById('planning-return-window');
+            winSelect.value = info.defaultTime;
+            
+            renderPlanningCalendarGrid(d);
+        };
+        
+        // Hover effects
+        cell.onmouseover = () => {
+            if (!cell.style.background.includes('var(--primary)') && !cell.style.background.includes('#10b981')) {
+                cell.style.background = isRecommended ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.08)";
+            }
+        };
+        cell.onmouseout = () => {
+            if (!cell.style.background.includes('var(--primary)') && !cell.style.background.includes('#10b981')) {
+                cell.style.background = isRecommended ? "rgba(16, 185, 129, 0.05)" : "none";
+            }
+        };
+        
+        grid.appendChild(cell);
+    }
+    
+    // Rellenar días del mes siguiente si es necesario
+    const totalCells = startDayOfWeek + daysInMonth;
+    const remainingCells = (7 - (totalCells % 7)) % 7;
+    for (let i = 1; i <= remainingCells; i++) {
+        const cell = document.createElement('div');
+        cell.textContent = i;
+        cell.style.cssText = "font-size: 11px; padding: 6px 0; text-align: center; color: var(--text-muted); opacity: 0.25; pointer-events: none;";
+        grid.appendChild(cell);
+    }
+}
+
 function openPlanningModal(id) {
     const d = deliveries.find(item => item.id === id);
     if (!d) return;
@@ -2891,6 +3056,9 @@ function openPlanningModal(id) {
     document.getElementById('planning-delivery-type').value = d.delivery_type || 'RECOGIDA';
     document.getElementById('planning-return-date').value = d.return_delivery_date || '';
     document.getElementById('planning-return-window').value = d.return_time_window || '';
+    
+    // Inicializar el calendario en línea estético
+    initPlanningCalendar(d);
     
     const saveBtn = document.getElementById('planning-save-btn');
     saveBtn.onclick = () => saveDeliveryPlanning(id);
