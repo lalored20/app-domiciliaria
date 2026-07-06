@@ -772,8 +772,8 @@ function getMergedDeliveries() {
                             return_time_window: meta.return_time_window || null
                         });
 
-                        // 2. Agregar la entrega de retorno si está programada
-                        if (meta.return_delivery_date) {
+                        // 2. Agregar la entrega de retorno si está programada y la principal es una RECOGIDA
+                        if (meta.return_delivery_date && (meta.delivery_type || "RECOGIDA") === "RECOGIDA") {
                             merged.push({
                                 id: o.id + "_return",
                                 order_id: o.id,
@@ -1269,6 +1269,8 @@ app.post('/api/deliveries/sync', async (req, res) => {
                             return_evidence_photo = COALESCE(?, return_evidence_photo),
                             return_signature_drawn = ?,
                             return_items_comments = ?,
+                            return_delivery_date = COALESCE(?, return_delivery_date),
+                            return_time_window = COALESCE(?, return_time_window),
                             updated_at = ?
                         WHERE order_id = ?
                     `, [
@@ -1276,6 +1278,8 @@ app.post('/api/deliveries/sync', async (req, res) => {
                         clientD.evidence_photo || null,
                         clientD.signature_drawn ? 1 : 0,
                         clientD.items_comments || null,
+                        clientD.return_delivery_date || null,
+                        clientD.return_time_window || null,
                         clientUpdatedAt,
                         targetId
                     ], (err) => {

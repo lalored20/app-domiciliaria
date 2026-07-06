@@ -2936,7 +2936,18 @@ async function saveDeliveryPlanning(id) {
     
     alert("✅ Planificación de entrega guardada correctamente.");
     closePlanningModal();
-    renderContent();
+    
+    // Si el repartidor configuró un día de retorno, cambiamos el calendario automáticamente a ese día de entrega
+    if (newReturnDate) {
+        const parts = newReturnDate.split('-');
+        if (parts.length === 3) {
+            viewYear = parseInt(parts[0]);
+            viewMonth = parseInt(parts[1]) - 1;
+        }
+        await selectDate(newReturnDate);
+    } else {
+        renderContent();
+    }
     
     // Lanzar sincronización en segundo plano de inmediato
     syncDataOffline();
@@ -3503,6 +3514,14 @@ async function runBackgroundSync() {
                     }
                     
                     if (updatedCount > 0 || isUsingLocalStorage) {
+                        if (!isUsingLocalStorage) {
+                            try {
+                                deliveries = await promiseWithTimeout(db.deliveries.toArray(), 2000, "Timeout al recargar entregas tras sync");
+                                deliveries = deliveries.filter(item => item && typeof item === 'object');
+                            } catch (e) {
+                                console.error("Error recargando entregas tras sync:", e);
+                            }
+                        }
                         if (updatedCount > 0) {
                             addSystemLog(`✅ Sync: Descargados ${updatedCount} nuevos pedidos desde el webhook.`);
                         }
