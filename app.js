@@ -3169,18 +3169,8 @@ async function saveDeliveryPlanning(id) {
     alert("✅ Planificación de entrega guardada correctamente.");
     closePlanningModal();
     
-    // Solo saltamos de fecha automáticamente si el pedido modificado es de tipo ENTREGA (reprogramación)
-    // Si es una RECOGIDA, nos quedamos en el día actual para que el repartidor pueda confirmar la recepción (firma y fotos)
-    if (newType === 'ENTREGA' && newReturnDate) {
-        const parts = newReturnDate.split('-');
-        if (parts.length === 3) {
-            viewYear = parseInt(parts[0]);
-            viewMonth = parseInt(parts[1]) - 1;
-        }
-        await selectDate(newReturnDate);
-    } else {
-        renderContent();
-    }
+    // Siempre mantener la vista en la fecha actual para permitir al repartidor continuar con su ruta
+    renderContent();
     
     // Lanzar sincronización local en segundo plano de inmediato
     runBackgroundSync();
