@@ -334,7 +334,7 @@ function renderCalendarStrip() {
         const formattedDay = String(d).padStart(2, '0');
         const dateStr = `${viewYear}-${formattedMonth}-${formattedDay}`;
         
-        const count = deliveries.filter(item => item.order_date === dateStr).length;
+        const count = deliveries.filter(item => item.order_date === dateStr && ['PENDIENTE', 'EN_RUTA', 'ENTREGADO'].includes(item.status)).length;
         const active = dateStr === currentDate ? 'active' : '';
         const isToday = dateStr === currentShift.shift_date;
         const todayClass = isToday ? 'today' : '';
