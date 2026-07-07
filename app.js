@@ -3118,8 +3118,8 @@ async function saveDeliveryPlanning(id) {
         renderContent();
     }
     
-    // Lanzar sincronización en segundo plano de inmediato
-    syncDataOffline();
+    // Lanzar sincronización local en segundo plano de inmediato
+    runBackgroundSync();
 }
 
 let _isConfirmingDelivery = false;
