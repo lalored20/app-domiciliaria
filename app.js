@@ -1828,19 +1828,29 @@ function renderPhotosGallery() {
 
 // Controlar habilitación del botón Completar
 function updateCompleteButtonState() {
-    const btn = document.getElementById("btn-complete-delivery");
+    const btn = document.getElementById("btn-confirm-right");
     if (!btn) return;
 
-    if (isPhotoCaptured && hasSigned) {
+    if (confirmModalStep === 1) {
         btn.style.opacity = "1";
         btn.style.pointerEvents = "auto";
-        btn.style.background = "var(--success)";
-        btn.style.boxShadow = "0 4px 15px var(--success-glow)";
-    } else {
-        btn.style.opacity = "0.4";
-        btn.style.pointerEvents = "none";
-        btn.style.background = "#666";
+        btn.style.background = "var(--primary)";
         btn.style.boxShadow = "none";
+        btn.innerHTML = "Siguiente &nbsp;➔";
+    } else {
+        if (isPhotoCaptured && hasSigned) {
+            btn.style.opacity = "1";
+            btn.style.pointerEvents = "auto";
+            btn.style.background = "var(--success)";
+            btn.style.boxShadow = "0 4px 15px var(--success-glow)";
+            btn.textContent = "Completar";
+        } else {
+            btn.style.opacity = "0.4";
+            btn.style.pointerEvents = "none";
+            btn.style.background = "#666";
+            btn.style.boxShadow = "none";
+            btn.textContent = "Completar";
+        }
     }
 }
 
@@ -2642,7 +2652,8 @@ function openConfirmModal(id) {
         
         renderPhotosGallery();
         hasSigned = false;
-        updateCompleteButtonState();
+        confirmModalStep = 1;
+        renderConfirmModalStep();
 
         document.getElementById('confirm-modal').style.display = 'flex';
         
@@ -2654,6 +2665,93 @@ function closeConfirmModal() {
     document.getElementById('confirm-modal').style.display = 'none';
     currentActiveDeliveryId = null;
 }
+
+let confirmModalStep = 1;
+
+function renderConfirmModalStep() {
+    const step1 = document.getElementById('confirm-step-1-container');
+    const step2 = document.getElementById('confirm-step-2-container');
+    const btnLeft = document.getElementById('btn-confirm-left');
+    const btnRight = document.getElementById('btn-confirm-right');
+    const titleEl = document.getElementById('modal-client-name');
+    
+    const ids = currentActiveDeliveryId ? currentActiveDeliveryId.split(',') : [];
+    const mainId = ids[0];
+    const d = deliveries.find(x => x.id === mainId);
+    if (!d) return;
+    
+    if (confirmModalStep === 1) {
+        if (step1) step1.style.display = 'block';
+        if (step2) step2.style.display = 'none';
+        
+        if (titleEl) {
+            titleEl.textContent = (d.delivery_type === 'RECOGIDA' ? "Paso 1: Recogida - " : "Paso 1: Entrega - ") + d.client_name;
+        }
+        
+        if (btnLeft) {
+            btnLeft.textContent = "Cancelar";
+            btnLeft.className = "btn btn-cancel";
+        }
+        if (btnRight) {
+            btnRight.innerHTML = "Siguiente &nbsp;➔";
+            btnRight.className = "btn btn-confirm";
+            btnRight.style.opacity = "1";
+            btnRight.style.pointerEvents = "auto";
+            btnRight.style.background = "var(--primary)";
+        }
+    } else {
+        if (step1) step1.style.display = 'none';
+        if (step2) step2.style.display = 'block';
+        
+        if (titleEl) {
+            titleEl.textContent = (d.delivery_type === 'RECOGIDA' ? "Paso 2: Retorno y Firma" : "Paso 2: Firma del Cliente");
+        }
+        
+        if (btnLeft) {
+            btnLeft.textContent = "Atrás";
+            btnLeft.className = "btn btn-cancel";
+        }
+        
+        updateCompleteButtonState();
+        
+        // Inicializar el canvas al mostrar el paso 2
+        setTimeout(() => {
+            const canvas = document.getElementById('signature-pad');
+            if (canvas) {
+                // Redimensionar el canvas para que dibuje correctamente en el modal visible
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                canvas.width = canvas.offsetWidth * ratio;
+                canvas.height = canvas.offsetHeight * ratio;
+                canvas.getContext("2d").scale(ratio, ratio);
+                // Si la firma ya fue dibujada anteriormente por el usuario en esta sesión
+                if (hasSigned) {
+                    // Limpiarlo o mantener estado
+                } else {
+                    clearSignatureCanvas();
+                }
+            }
+        }, 50);
+    }
+}
+
+function handleConfirmLeftButton() {
+    if (confirmModalStep === 1) {
+        closeConfirmModal();
+    } else {
+        confirmModalStep = 1;
+        renderConfirmModalStep();
+    }
+}
+
+function handleConfirmRightButton() {
+    if (confirmModalStep === 1) {
+        confirmModalStep = 2;
+        renderConfirmModalStep();
+    } else {
+        confirmDelivery();
+    }
+}
+
 
 function formatShortAddress(address) {
     if (!address) return '';

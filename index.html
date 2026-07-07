@@ -150,78 +150,84 @@
                     Monto a reportar: <strong style="color: var(--text-main)" id="modal-amount">$0</strong>
                 </p>
 
-                <!-- Foto de Evidencia -->
-                <div class="input-group">
-                    <label style="margin-bottom: 6px; display: block;">Evidencia de Entrega (Fotos)</label>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px;" id="photos-gallery-container">
-                        <!-- Se inyecta dinámicamente desde JS -->
-                    </div>
-                    <input type="file" accept="image/*" capture="environment" id="camera-input" style="display: none;" onchange="handleCameraFile(event)">
-                    <input type="file" accept="image/*" capture="environment" id="facade-camera-input" style="display: none;" onchange="handleFacadePhoto(event)">
-                </div>
-
-                <!-- Control Manual de Prendas -->
-                <div class="input-group">
-                    <label>Control de Prendas (Verificación Manual)</label>
-                    <div id="modal-garments-verification-table" style="margin-top: 5px;"></div>
-                    <div id="modal-items-count-summary" style="font-size: 11px; margin-top: 6px; text-align: center; color: var(--text-muted); font-weight: 500;"></div>
-                    
-                    <!-- Botón e inline form para agregar prenda extra manualmente -->
-                    <div style="text-align: right; margin-top: 8px; margin-bottom: 4px;">
-                        <span id="btn-add-extra-garment" style="font-size: 11px; color: var(--primary); cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; border: 1px dashed rgba(139,92,246,0.3); padding: 4px 10px; border-radius: 20px; background: rgba(139,92,246,0.04); transition: all 0.2s;" onmouseover="this.style.background='rgba(139,92,246,0.1)'; this.style.borderColor='var(--primary)';" onmouseout="this.style.background='rgba(139,92,246,0.04)'; this.style.borderColor='rgba(139,92,246,0.3)';" onclick="showAddExtraGarmentForm()">
-                            ➕ Agregar prenda no registrada
-                        </span>
-                    </div>
-                    
-                    <div id="extra-garment-form" style="display: none; background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 8px; padding: 10px; margin-top: 8px; text-align: left;">
-                        <div style="font-weight: 700; font-size: 11px; color: var(--primary); margin-bottom: 6px; text-transform: uppercase;">Agregar prenda no registrada</div>
-                        <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-                            <input type="text" id="extra-garment-name" placeholder="Nombre (ej. Vestido rojo)" style="flex: 2; padding: 6px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); outline: none;">
-                            <input type="number" id="extra-garment-qty" placeholder="Cant" min="1" value="1" style="width: 55px; padding: 6px 4px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); text-align: center; outline: none;">
-                            <input type="number" id="extra-garment-price" placeholder="Precio $" min="0" style="width: 75px; padding: 6px 4px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); text-align: center; outline: none;">
+                <!-- Contenedor del Paso 1: Evidencias y Prendas -->
+                <div id="confirm-step-1-container">
+                    <!-- Foto de Evidencia -->
+                    <div class="input-group">
+                        <label style="margin-bottom: 6px; display: block;">Evidencia de Entrega (Fotos)</label>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px;" id="photos-gallery-container">
+                            <!-- Se inyecta dinámicamente desde JS -->
                         </div>
-                        <input type="text" id="extra-garment-comment" placeholder="Novedad/Especificación (ej. Llegó de más)" style="width: 100%; padding: 6px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); outline: none; margin-bottom: 6px; box-sizing: border-box;">
-                        <div style="display: flex; justify-content: flex-end; gap: 6px;">
-                            <button class="btn" onclick="hideAddExtraGarmentForm()" style="padding: 4px 10px; font-size: 10px; background: transparent; border-color: var(--border); height: auto; line-height: 1.2;">Cancelar</button>
-                            <button class="btn" onclick="addExtraGarmentToVerification()" style="padding: 4px 10px; font-size: 10px; background: var(--primary); border-color: var(--primary); color: white; height: auto; line-height: 1.2;">Agregar</button>
+                        <input type="file" accept="image/*" capture="environment" id="camera-input" style="display: none;" onchange="handleCameraFile(event)">
+                        <input type="file" accept="image/*" capture="environment" id="facade-camera-input" style="display: none;" onchange="handleFacadePhoto(event)">
+                    </div>
+
+                    <!-- Control Manual de Prendas -->
+                    <div class="input-group">
+                        <label>Control de Prendas (Verificación Manual)</label>
+                        <div id="modal-garments-verification-table" style="margin-top: 5px;"></div>
+                        <div id="modal-items-count-summary" style="font-size: 11px; margin-top: 6px; text-align: center; color: var(--text-muted); font-weight: 500;"></div>
+                        
+                        <!-- Botón e inline form para agregar prenda extra manualmente -->
+                        <div style="text-align: right; margin-top: 8px; margin-bottom: 4px;">
+                            <span id="btn-add-extra-garment" style="font-size: 11px; color: var(--primary); cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; border: 1px dashed rgba(139,92,246,0.3); padding: 4px 10px; border-radius: 20px; background: rgba(139,92,246,0.04); transition: all 0.2s;" onmouseover="this.style.background='rgba(139,92,246,0.1)'; this.style.borderColor='var(--primary)';" onmouseout="this.style.background='rgba(139,92,246,0.04)'; this.style.borderColor='rgba(139,92,246,0.3)';" onclick="showAddExtraGarmentForm()">
+                                ➕ Agregar prenda no registrada
+                            </span>
+                        </div>
+                        
+                        <div id="extra-garment-form" style="display: none; background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 8px; padding: 10px; margin-top: 8px; text-align: left;">
+                            <div style="font-weight: 700; font-size: 11px; color: var(--primary); margin-bottom: 6px; text-transform: uppercase;">Agregar prenda no registrada</div>
+                            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                                <input type="text" id="extra-garment-name" placeholder="Nombre (ej. Vestido rojo)" style="flex: 2; padding: 6px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); outline: none;">
+                                <input type="number" id="extra-garment-qty" placeholder="Cant" min="1" value="1" style="width: 55px; padding: 6px 4px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); text-align: center; outline: none;">
+                                <input type="number" id="extra-garment-price" placeholder="Precio $" min="0" style="width: 75px; padding: 6px 4px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); text-align: center; outline: none;">
+                            </div>
+                            <input type="text" id="extra-garment-comment" placeholder="Novedad/Especificación (ej. Llegó de más)" style="width: 100%; padding: 6px 8px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-main); outline: none; margin-bottom: 6px; box-sizing: border-box;">
+                            <div style="display: flex; justify-content: flex-end; gap: 6px;">
+                                <button class="btn" onclick="hideAddExtraGarmentForm()" style="padding: 4px 10px; font-size: 10px; background: transparent; border-color: var(--border); height: auto; line-height: 1.2;">Cancelar</button>
+                                <button class="btn" onclick="addExtraGarmentToVerification()" style="padding: 4px 10px; font-size: 10px; background: var(--primary); border-color: var(--primary); color: white; height: auto; line-height: 1.2;">Agregar</button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Programar Entrega de Retorno (Solo para Recogidas) -->
-                <div class="input-group" id="confirm-return-scheduling-section" style="display: none; background: rgba(139, 92, 246, 0.04); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 16px; padding: 14px; margin: 15px 0;">
-                    <label style="font-weight: 700; color: #a78bfa; font-size: 13.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-                        <span>📅</span> Programar Entrega de Retorno
-                    </label>
-                    <div style="margin-bottom: 10px;">
-                        <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px; letter-spacing: 0.5px;">FECHA ESTIMADA DE ENTREGA</label>
-                        <input type="date" id="confirm-return-date" class="input-text" style="width: 100%; border-radius: 12px; height: auto; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); font-size: 13px; font-weight: 600; box-sizing: border-box; outline: none; transition: all 0.2s;">
+                <!-- Contenedor del Paso 2: Programación de Retorno y Firma -->
+                <div id="confirm-step-2-container" style="display: none;">
+                    <!-- Programar Entrega de Retorno (Solo para Recogidas) -->
+                    <div class="input-group" id="confirm-return-scheduling-section" style="display: none; background: rgba(139, 92, 246, 0.04); border: 1px solid rgba(139, 92, 246, 0.15); border-radius: 16px; padding: 14px; margin: 15px 0;">
+                        <label style="font-weight: 700; color: #a78bfa; font-size: 13.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <span>📅</span> Programar Entrega de Retorno
+                        </label>
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px; letter-spacing: 0.5px;">FECHA ESTIMADA DE ENTREGA</label>
+                            <input type="date" id="confirm-return-date" class="input-text" style="width: 100%; border-radius: 12px; height: auto; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); font-size: 13px; font-weight: 600; box-sizing: border-box; outline: none; transition: all 0.2s;">
+                        </div>
+                        <div>
+                            <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px; letter-spacing: 0.5px;">BLOQUE HORARIO DE ENTREGA</label>
+                            <select id="confirm-return-window" class="input-text" style="width: 100%; border-radius: 12px; height: auto; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); font-size: 13px; font-weight: 600; box-sizing: border-box; outline: none; appearance: none; -webkit-appearance: none; background-image: url(&quot;data:image/svg+xml;utf8,<svg fill='%23a78bfa' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>&quot;); background-repeat: no-repeat; background-position: right 10px center; background-size: 20px; padding-right: 32px; transition: all 0.2s;">
+                                <option value="">Seleccione franja...</option>
+                                <option value="08:00 - 11:00">08:00 - 11:00 (Norte/Centro - Lun/Mié/Vie)</option>
+                                <option value="11:00 - 14:00">11:00 - 14:00 (Norte/Centro - Lun/Mié/Vie)</option>
+                                <option value="09:00 - 12:00">09:00 - 12:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
+                                <option value="12:00 - 15:00">12:00 - 15:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <label style="font-size: 10px; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px; letter-spacing: 0.5px;">BLOQUE HORARIO DE ENTREGA</label>
-                        <select id="confirm-return-window" class="input-text" style="width: 100%; border-radius: 12px; height: auto; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border); color: var(--text-main); font-size: 13px; font-weight: 600; box-sizing: border-box; outline: none; appearance: none; -webkit-appearance: none; background-image: url(&quot;data:image/svg+xml;utf8,<svg fill='%23a78bfa' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>&quot;); background-repeat: no-repeat; background-position: right 10px center; background-size: 20px; padding-right: 32px; transition: all 0.2s;">
-                            <option value="">Seleccione franja...</option>
-                            <option value="08:00 - 11:00">08:00 - 11:00 (Norte/Centro - Lun/Mié/Vie)</option>
-                            <option value="11:00 - 14:00">11:00 - 14:00 (Norte/Centro - Lun/Mié/Vie)</option>
-                            <option value="09:00 - 12:00">09:00 - 12:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
-                            <option value="12:00 - 15:00">12:00 - 15:00 (Occidente/Sur - Mar/Jue/Sáb)</option>
-                        </select>
-                    </div>
-                </div>
 
-                <!-- Firma Digital Canvas -->
-                <div class="input-group">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <label>Firma del Cliente (Dibuja abajo)</label>
-                        <span style="font-size:11px; color:var(--primary); cursor:pointer; font-weight:bold;" onclick="clearSignatureCanvas()">[Borrar]</span>
+                    <!-- Firma Digital Canvas -->
+                    <div class="input-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <label>Firma del Cliente (Dibuja abajo)</label>
+                            <span style="font-size:11px; color:var(--primary); cursor:pointer; font-weight:bold;" onclick="clearSignatureCanvas()">[Borrar]</span>
+                        </div>
+                        <canvas id="signature-pad" class="signature-canvas"></canvas>
                     </div>
-                    <canvas id="signature-pad" class="signature-canvas"></canvas>
                 </div>
 
                 <!-- Botones de Acción del Modal -->
                 <div class="modal-buttons">
-                    <button class="btn btn-cancel" onclick="closeConfirmModal()">Cancelar</button>
-                    <button class="btn btn-confirm" id="btn-complete-delivery" onclick="confirmDelivery()" style="opacity: 0.4; pointer-events: none; background: #666;">Completar</button>
+                    <button class="btn btn-cancel" id="btn-confirm-left" onclick="handleConfirmLeftButton()">Cancelar</button>
+                    <button class="btn btn-confirm" id="btn-confirm-right" onclick="handleConfirmRightButton()">Siguiente ➔</button>
                 </div>
             </div>
         </div>
