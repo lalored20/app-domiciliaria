@@ -2571,7 +2571,30 @@ function openConfirmModal(id) {
     const d = groupItems.find(d => d.id === mainId);
     
     if (d) {
-        document.getElementById('modal-client-name').textContent = "Entrega: " + d.client_name;
+        document.getElementById('modal-client-name').textContent = (d.delivery_type === 'RECOGIDA' ? "Recogida: " : "Entrega: ") + d.client_name;
+        
+        // Mostrar u ocultar sección de programar entrega de retorno según tipo de pedido
+        const returnSection = document.getElementById('confirm-return-scheduling-section');
+        if (returnSection) {
+            if (d.delivery_type === 'RECOGIDA') {
+                returnSection.style.display = 'block';
+                
+                // Pre-rellenar con fecha/franja de retorno ya configuradas o sugerida (6 días después)
+                let targetDateStr = d.return_delivery_date;
+                if (!targetDateStr) {
+                    const future = new Date();
+                    future.setDate(future.getDate() + 6);
+                    targetDateStr = future.toISOString().split('T')[0];
+                }
+                document.getElementById('confirm-return-date').value = targetDateStr;
+                
+                // Sugerir bloque horario basado en la zona
+                const info = getLocalidadGroupInfo(d.localidad);
+                document.getElementById('confirm-return-window').value = d.return_time_window || info.defaultTime || '';
+            } else {
+                returnSection.style.display = 'none';
+            }
+        }
         
         // Sumar montos del grupo
         const totalAmt = groupItems.reduce((sum, item) => sum + (item.amount || 0), 0);
@@ -3226,34 +3249,42 @@ async function confirmDelivery() {
                         addSystemLog(`⚠️ ALERTA: Discrepancia física en ${d.client_name} (#${d.ticket_number}). Chatbot: ${d.expected_items} | Domiciliario: ${d.collected_items}.`);
                     }
                     
-                    // Al confirmar el recibido de una RECOGIDA con fecha de retorno pactada, crear la entrega de retorno local de inmediato
-                    if (d.delivery_type === 'RECOGIDA' && d.return_delivery_date) {
-                        const returnId = d.id + "_return";
-                        let returnCard = deliveries.find(x => x.id === returnId);
-                        if (!returnCard) {
-                            returnCard = {
-                                ...d,
-                                id: returnId,
-                                order_id: d.id,
-                                chatbot_order_id: d.id,
-                                delivery_type: "ENTREGA",
-                                amount: 0,
-                                status: "PENDIENTE",
-                                sync_pending: true
-                            };
-                            deliveries.push(returnCard);
+                    // Al confirmar el recibido de una RECOGIDA, leer y programar la entrega de retorno
+                    if (d.delivery_type === 'RECOGIDA') {
+                        const schedDate = document.getElementById('confirm-return-date').value || null;
+                        const schedWindow = document.getElementById('confirm-return-window').value || null;
+                        
+                        if (schedDate) {
+                            d.return_delivery_date = schedDate;
+                            d.return_time_window = schedWindow;
+                            
+                            const returnId = d.id + "_return";
+                            let returnCard = deliveries.find(x => x.id === returnId);
+                            if (!returnCard) {
+                                returnCard = {
+                                    ...d,
+                                    id: returnId,
+                                    order_id: d.id,
+                                    chatbot_order_id: d.id,
+                                    delivery_type: "ENTREGA",
+                                    amount: 0,
+                                    status: "PENDIENTE",
+                                    sync_pending: true
+                                };
+                                deliveries.push(returnCard);
+                            }
+                            returnCard.order_date = schedDate;
+                            returnCard.time_window = schedWindow || "12:00 - 15:00";
+                            returnCard.return_delivery_date = schedDate;
+                            returnCard.return_time_window = schedWindow;
+                            returnCard.status = "PENDIENTE";
+                            returnCard.evidence_photo = null;
+                            returnCard.signature_drawn = false;
+                            if (returnCard.previous_status) {
+                                delete returnCard.previous_status;
+                            }
+                            returnCard.sync_pending = true;
                         }
-                        returnCard.order_date = d.return_delivery_date;
-                        returnCard.time_window = d.return_time_window || "12:00 - 15:00";
-                        returnCard.return_delivery_date = d.return_delivery_date;
-                        returnCard.return_time_window = d.return_time_window;
-                        returnCard.status = "PENDIENTE";
-                        returnCard.evidence_photo = null;
-                        returnCard.signature_drawn = false;
-                        if (returnCard.previous_status) {
-                            delete returnCard.previous_status;
-                        }
-                        returnCard.sync_pending = true;
                     }
                 }
                 
