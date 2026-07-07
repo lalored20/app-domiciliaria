@@ -3155,6 +3155,12 @@ async function saveDeliveryPlanning(id) {
         returnCard.time_window = newReturnWindow || "12:00 - 15:00";
         returnCard.return_delivery_date = newReturnDate;
         returnCard.return_time_window = newReturnWindow;
+        returnCard.status = "PENDIENTE";
+        returnCard.evidence_photo = null;
+        returnCard.signature_drawn = false;
+        if (returnCard.previous_status) {
+            delete returnCard.previous_status;
+        }
         returnCard.sync_pending = true;
     }
     

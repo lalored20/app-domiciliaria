@@ -1266,17 +1266,20 @@ app.post('/api/deliveries/sync', async (req, res) => {
                     appDb.run(`
                         UPDATE delivery_metadata SET 
                             return_status = ?,
-                            return_evidence_photo = COALESCE(?, return_evidence_photo),
-                            return_signature_drawn = ?,
-                            return_items_comments = ?,
+                            return_evidence_photo = CASE WHEN ? = 'PENDIENTE' THEN NULL ELSE COALESCE(?, return_evidence_photo) END,
+                            return_signature_drawn = CASE WHEN ? = 'PENDIENTE' THEN 0 ELSE ? END,
+                            return_items_comments = CASE WHEN ? = 'PENDIENTE' THEN NULL ELSE ? END,
                             return_delivery_date = COALESCE(?, return_delivery_date),
                             return_time_window = COALESCE(?, return_time_window),
                             updated_at = ?
                         WHERE order_id = ?
                     `, [
                         clientD.status,
+                        clientD.status,
                         clientD.evidence_photo || null,
+                        clientD.status,
                         clientD.signature_drawn ? 1 : 0,
+                        clientD.status,
                         clientD.items_comments || null,
                         clientD.return_delivery_date || null,
                         clientD.return_time_window || null,
