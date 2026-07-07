@@ -3415,6 +3415,17 @@ async function saveDeliveryPlanning(id) {
     d.return_time_window = newReturnWindow;
     d.sync_pending = true;
     
+    // Si estamos editando directamente la tarjeta de retorno, sincronizar los datos en el objeto padre
+    if (d.id && d.id.endsWith('_return')) {
+        const parentId = d.id.replace('_return', '');
+        const parentCard = deliveries.find(x => x.id === parentId);
+        if (parentCard) {
+            parentCard.return_delivery_date = newReturnDate;
+            parentCard.return_time_window = newReturnWindow;
+            parentCard.sync_pending = true;
+        }
+    }
+    
     // Si el tipo cambia a ENTREGA, ajustamos la fecha activa de la orden para que se muestre en ese día de reparto
     if (newType === 'ENTREGA' && newReturnDate) {
         d.order_date = newReturnDate;
