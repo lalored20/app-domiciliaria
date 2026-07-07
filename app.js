@@ -887,9 +887,6 @@ function createDeliveryCard(d) {
             <a class="btn btn-call" href="tel:${d.client_phone}">
                 📞 Llamar
             </a>
-            <button class="btn" onclick="openPlanningModal('${mainId}')" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); color: #a78bfa; font-weight: 700; font-size: 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 8px; transition: all 0.2s;" onmouseover="this.style.background='rgba(139, 92, 246, 0.2)'" onmouseout="this.style.background='rgba(139, 92, 246, 0.1)'">
-                ⚙️ Planificar
-            </button>
             ${startButton}
         `;
         card.appendChild(actions);
