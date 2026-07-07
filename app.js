@@ -3134,35 +3134,7 @@ async function saveDeliveryPlanning(id) {
         deliveries = deliveries.filter(x => x.id !== returnId);
     }
     
-    // Si sigue siendo RECOGIDA y se planifica una entrega de retorno, creamos/actualizamos la tarjeta de retorno local de inmediato
-    if (newType === 'RECOGIDA' && newReturnDate) {
-        const returnId = d.id + "_return";
-        let returnCard = deliveries.find(x => x.id === returnId);
-        if (!returnCard) {
-            returnCard = {
-                ...d,
-                id: returnId,
-                order_id: d.id,
-                chatbot_order_id: d.id,
-                delivery_type: "ENTREGA",
-                amount: 0,
-                status: "PENDIENTE",
-                sync_pending: true
-            };
-            deliveries.push(returnCard);
-        }
-        returnCard.order_date = newReturnDate;
-        returnCard.time_window = newReturnWindow || "12:00 - 15:00";
-        returnCard.return_delivery_date = newReturnDate;
-        returnCard.return_time_window = newReturnWindow;
-        returnCard.status = "PENDIENTE";
-        returnCard.evidence_photo = null;
-        returnCard.signature_drawn = false;
-        if (returnCard.previous_status) {
-            delete returnCard.previous_status;
-        }
-        returnCard.sync_pending = true;
-    }
+    // La tarjeta de retorno no se crea aquí al planificar; se creará únicamente cuando el repartidor confirme el recibido (recogida) final.
     
     try {
         await saveDeliveries();
@@ -3252,6 +3224,36 @@ async function confirmDelivery() {
                 if (d.id === mainId) {
                     if (d.expected_items !== d.collected_items) {
                         addSystemLog(`⚠️ ALERTA: Discrepancia física en ${d.client_name} (#${d.ticket_number}). Chatbot: ${d.expected_items} | Domiciliario: ${d.collected_items}.`);
+                    }
+                    
+                    // Al confirmar el recibido de una RECOGIDA con fecha de retorno pactada, crear la entrega de retorno local de inmediato
+                    if (d.delivery_type === 'RECOGIDA' && d.return_delivery_date) {
+                        const returnId = d.id + "_return";
+                        let returnCard = deliveries.find(x => x.id === returnId);
+                        if (!returnCard) {
+                            returnCard = {
+                                ...d,
+                                id: returnId,
+                                order_id: d.id,
+                                chatbot_order_id: d.id,
+                                delivery_type: "ENTREGA",
+                                amount: 0,
+                                status: "PENDIENTE",
+                                sync_pending: true
+                            };
+                            deliveries.push(returnCard);
+                        }
+                        returnCard.order_date = d.return_delivery_date;
+                        returnCard.time_window = d.return_time_window || "12:00 - 15:00";
+                        returnCard.return_delivery_date = d.return_delivery_date;
+                        returnCard.return_time_window = d.return_time_window;
+                        returnCard.status = "PENDIENTE";
+                        returnCard.evidence_photo = null;
+                        returnCard.signature_drawn = false;
+                        if (returnCard.previous_status) {
+                            delete returnCard.previous_status;
+                        }
+                        returnCard.sync_pending = true;
                     }
                 }
                 

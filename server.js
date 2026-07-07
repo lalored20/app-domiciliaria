@@ -772,8 +772,8 @@ function getMergedDeliveries() {
                             return_time_window: meta.return_time_window || null
                         });
 
-                        // 2. Agregar la entrega de retorno si está programada y la principal es una RECOGIDA
-                        if (meta.return_delivery_date && (meta.delivery_type || "RECOGIDA") === "RECOGIDA") {
+                        // 2. Agregar la entrega de retorno si está programada, la principal es una RECOGIDA y ya fue confirmada (ENTREGADO)
+                        if (meta.return_delivery_date && (meta.delivery_type || "RECOGIDA") === "RECOGIDA" && o.status === "ENTREGADO") {
                             merged.push({
                                 id: o.id + "_return",
                                 order_id: o.id,
