@@ -4057,6 +4057,26 @@ async function runBackgroundSync() {
                         }
                     }
                     
+                    // Limpieza de retornos obsoletos o deshechos locales
+                    for (let i = localD.length - 1; i >= 0; i--) {
+                        const item = localD[i];
+                        if (item && item.id && item.id.endsWith('_return')) {
+                            const parentId = item.id.replace('_return', '');
+                            const parentItem = result.data.find(x => x.id === parentId);
+                            if (!parentItem || parentItem.status !== 'ENTREGADO' || !parentItem.return_delivery_date) {
+                                if (!isUsingLocalStorage) {
+                                    try {
+                                        await promiseWithTimeout(db.deliveries.delete(item.id), 1000, "Timeout al borrar retorno huérfano");
+                                    } catch (e) {
+                                        isUsingLocalStorage = true;
+                                    }
+                                }
+                                localD.splice(i, 1);
+                                updatedCount++;
+                            }
+                        }
+                    }
+                    
                     // Quitar flag sync_pending si el servidor reconoció los cambios
                     for (const d of pendingD) {
                         const localItem = localD.find(x => x.id === d.id);
@@ -4122,7 +4142,7 @@ async function runBackgroundSync() {
                         await saveDeliveries();
                     }
                     
-                    if (updatedCount > 0 || isUsingLocalStorage) {
+                    if (updatedCount > 0 || pendingD.length > 0 || isUsingLocalStorage) {
                         if (!isUsingLocalStorage) {
                             try {
                                 deliveries = await promiseWithTimeout(db.deliveries.toArray(), 2000, "Timeout al recargar entregas tras sync");

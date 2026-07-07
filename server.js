@@ -1244,23 +1244,8 @@ app.post('/api/deliveries/sync', async (req, res) => {
             const isReturn = clientD.id && clientD.id.endsWith('_return');
             const targetId = isReturn ? clientD.id.replace('_return', '') : clientD.id;
             
-            // 1. Actualizar el estado y el monto cobrado (totalValue) en el chatbot's messages.db
-            chatbotDb.run(`
-                UPDATE local_orders 
-                SET status = ?, totalValue = ?, updated_at = ? 
-                WHERE (id = ? OR ticketNumber = ?) AND (? >= updated_at OR updated_at IS NULL)
-            `, [
-                clientD.status,
-                clientD.amount || 0,
-                clientUpdatedAt,
-                targetId,
-                targetId.replace('QR-ORQUIDEAS-', ''),
-                clientUpdatedAt
-            ], (err) => {
-                if (err) {
-                    console.error(`❌ Error actualizando estado en messages.db para ${clientD.id}:`, err.message);
-                }
-                
+            // Función para proceder a actualizar delivery_metadata
+            const proceedToMetadata = () => {
                 if (isReturn) {
                     // 2. Guardar metadatos de entrega de retorno en domiciliaria.db
                     appDb.run(`
@@ -1334,83 +1319,125 @@ app.post('/api/deliveries/sync', async (req, res) => {
                         if (err) {
                             console.error(`❌ Error guardando metadatos en domiciliaria.db para ${clientD.id}:`, err.message);
                         }
-                    
-                    // Guardar información de fachada si está presente
-                    if (clientD.facade_photo || (clientD.facade_latitude && clientD.facade_longitude)) {
-                        const clientPhoneClean = clientD.client_phone ? clientD.client_phone.replace(/\D/g, '') : '';
-                        let finalAddress = clientD.address;
-                        let resolvedLoc = null;
                         
-                        // Función auxiliar interna para insertar/actualizar fachada en SQLite
-                        const saveFacadeToDb = (addrVal, locVal) => {
-                            appDb.run(`
-                                INSERT INTO client_facade (
-                                    client_phone, client_name, address, facade_photo, latitude, longitude, updated_at
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                                ON CONFLICT(client_phone) DO UPDATE SET
-                                    client_name = excluded.client_name,
-                                    address = excluded.address,
-                                    facade_photo = COALESCE(excluded.facade_photo, facade_photo),
-                                    latitude = COALESCE(excluded.latitude, latitude),
-                                    longitude = COALESCE(excluded.longitude, longitude),
-                                    updated_at = excluded.updated_at
-                            `, [
-                                clientPhoneClean,
-                                clientD.client_name,
-                                addrVal || clientD.address,
-                                clientD.facade_photo || null,
-                                clientD.facade_latitude ? parseFloat(clientD.facade_latitude) : null,
-                                clientD.facade_longitude ? parseFloat(clientD.facade_longitude) : null,
-                                nowEpoch
-                            ], (err) => {
-                                if (err) {
-                                    console.error(`❌ Error guardando fachada en client_facade para ${clientD.client_phone}:`, err.message);
-                                }
-                                resolve();
-                            });
-                        };
+                        // Guardar información de fachada si está presente
+                        if (clientD.facade_photo || (clientD.facade_latitude && clientD.facade_longitude)) {
+                            const clientPhoneClean = clientD.client_phone ? clientD.client_phone.replace(/\D/g, '') : '';
+                            let finalAddress = clientD.address;
+                            let resolvedLoc = null;
+                            
+                            const saveFacadeToDb = (addrVal, locVal) => {
+                                appDb.run(`
+                                    INSERT INTO client_facade (
+                                        client_phone, client_name, address, facade_photo, latitude, longitude, updated_at
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                                    ON CONFLICT(client_phone) DO UPDATE SET
+                                        client_name = excluded.client_name,
+                                        address = excluded.address,
+                                        facade_photo = COALESCE(excluded.facade_photo, facade_photo),
+                                        latitude = COALESCE(excluded.latitude, latitude),
+                                        longitude = COALESCE(excluded.longitude, longitude),
+                                        updated_at = excluded.updated_at
+                                `, [
+                                    clientPhoneClean,
+                                    clientD.client_name,
+                                    addrVal || clientD.address,
+                                    clientD.facade_photo || null,
+                                    clientD.facade_latitude ? parseFloat(clientD.facade_latitude) : null,
+                                    clientD.facade_longitude ? parseFloat(clientD.facade_longitude) : null,
+                                    nowEpoch
+                                ], (err) => {
+                                    if (err) {
+                                        console.error(`❌ Error guardando fachada en client_facade para ${clientD.client_phone}:`, err.message);
+                                    }
+                                    resolve();
+                                });
+                            };
 
-                        const isAddrUnconfirmed = !finalAddress || finalAddress.toLowerCase().includes("confirmar") || finalAddress.trim() === "";
-                        if (isAddrUnconfirmed && clientD.facade_latitude && clientD.facade_longitude) {
-                            reverseGeocode(parseFloat(clientD.facade_latitude), parseFloat(clientD.facade_longitude)).then(geoRes => {
-                                if (geoRes && geoRes.display_name) {
-                                    finalAddress = geoRes.display_name;
-                                    resolvedLoc = geoRes.localidad;
-                                    console.log(`✅ [Geocoder Satelital] Dirección de fachada resuelta para ${clientPhoneClean}: "${finalAddress}" [${resolvedLoc}]`);
-                                    
-                                    // 1. Insertar o actualizar resolved_address y resolved_localidad en delivery_metadata de la orden
-                                    appDb.run(`
-                                        INSERT INTO delivery_metadata (
-                                            order_id, resolved_address, resolved_localidad, updated_at
-                                        ) VALUES (?, ?, ?, ?)
-                                        ON CONFLICT(order_id) DO UPDATE SET
-                                            resolved_address = excluded.resolved_address,
-                                            resolved_localidad = excluded.resolved_localidad,
-                                            updated_at = excluded.updated_at
-                                    `, [clientD.id, finalAddress, resolvedLoc, nowEpoch], (err) => {
-                                        if (err) {
-                                            console.error("❌ Error haciendo UPSERT de resolved_address en delivery_metadata:", err.message);
-                                        }
-                                        // 2. Guardar en client_facade
-                                        saveFacadeToDb(finalAddress, resolvedLoc);
-                                    });
-                                } else {
+                            const isAddrUnconfirmed = !finalAddress || finalAddress.toLowerCase().includes("confirmar") || finalAddress.trim() === "";
+                            if (isAddrUnconfirmed && clientD.facade_latitude && clientD.facade_longitude) {
+                                reverseGeocode(parseFloat(clientD.facade_latitude), parseFloat(clientD.facade_longitude)).then(geoRes => {
+                                    if (geoRes && geoRes.display_name) {
+                                        finalAddress = geoRes.display_name;
+                                        resolvedLoc = geoRes.localidad;
+                                        console.log(`✅ [Geocoder Satelital] Dirección de fachada resuelta para ${clientPhoneClean}: "${finalAddress}" [${resolvedLoc}]`);
+                                        
+                                        appDb.run(`
+                                            INSERT INTO delivery_metadata (
+                                                order_id, resolved_address, resolved_localidad, updated_at
+                                            ) VALUES (?, ?, ?, ?)
+                                            ON CONFLICT(order_id) DO UPDATE SET
+                                                resolved_address = excluded.resolved_address,
+                                                resolved_localidad = excluded.resolved_localidad,
+                                                updated_at = excluded.updated_at
+                                        `, [clientD.id, finalAddress, resolvedLoc, nowEpoch], (err) => {
+                                            if (err) {
+                                                console.error("❌ Error haciendo UPSERT de resolved_address en delivery_metadata:", err.message);
+                                            }
+                                            saveFacadeToDb(finalAddress, resolvedLoc);
+                                        });
+                                    } else {
+                                        saveFacadeToDb(null, null);
+                                    }
+                                }).catch(() => {
                                     saveFacadeToDb(null, null);
-                                }
-                            }).catch(() => {
+                                });
+                            } else {
                                 saveFacadeToDb(null, null);
-                            });
+                            }
                         } else {
-                            saveFacadeToDb(null, null);
+                            resolve();
                         }
-                    } else {
-                        resolve();
+                    });
+                }
+            };
+            
+            // 1. Actualizar el chatbot's messages.db según corresponda
+            if (isReturn) {
+                if (clientD.status === 'ENTREGADO') {
+                    // Si el retorno se completó, la orden completa pasa a ENTREGADO en messages.db (sin alterar totalValue)
+                    chatbotDb.run(`
+                        UPDATE local_orders 
+                        SET status = ?, updated_at = ? 
+                        WHERE (id = ? OR ticketNumber = ?) AND (? >= updated_at OR updated_at IS NULL)
+                    `, [
+                        'ENTREGADO',
+                        clientUpdatedAt,
+                        targetId,
+                        targetId.replace('QR-ORQUIDEAS-', ''),
+                        clientUpdatedAt
+                    ], (err) => {
+                        if (err) {
+                            console.error(`❌ Error actualizando estado de retorno en messages.db para ${clientD.id}:`, err.message);
+                        }
+                        proceedToMetadata();
+                    });
+                } else {
+                    // Si es retorno pero no está entregado, NO alterar el estado de la orden principal en messages.db
+                    proceedToMetadata();
+                }
+            } else {
+                // Si es la recogida principal, actualizar estado y totalValue normalmente
+                chatbotDb.run(`
+                    UPDATE local_orders 
+                    SET status = ?, totalValue = ?, updated_at = ? 
+                    WHERE (id = ? OR ticketNumber = ?) AND (? >= updated_at OR updated_at IS NULL)
+                `, [
+                    clientD.status,
+                    clientD.amount || 0,
+                    clientUpdatedAt,
+                    targetId,
+                    targetId.replace('QR-ORQUIDEAS-', ''),
+                    clientUpdatedAt
+                ], (err) => {
+                    if (err) {
+                        console.error(`❌ Error actualizando estado en messages.db para ${clientD.id}:`, err.message);
                     }
+                    proceedToMetadata();
                 });
             }
         });
     });
-});
 
     try {
         await Promise.all(promises);
