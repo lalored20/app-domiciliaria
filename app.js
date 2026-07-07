@@ -2703,6 +2703,16 @@ function renderConfirmModalStep() {
         if (step1) step1.style.display = 'none';
         if (step2) step2.style.display = 'block';
         
+        const returnSection = document.getElementById('confirm-return-scheduling-section');
+        if (returnSection) {
+            if (d.delivery_type === 'RECOGIDA') {
+                returnSection.style.display = 'block';
+                initConfirmCalendar(d);
+            } else {
+                returnSection.style.display = 'none';
+            }
+        }
+        
         if (titleEl) {
             titleEl.textContent = (d.delivery_type === 'RECOGIDA' ? "Paso 2: Retorno y Firma" : "Paso 2: Firma del Cliente");
         }
@@ -2749,6 +2759,167 @@ function handleConfirmRightButton() {
         renderConfirmModalStep();
     } else {
         confirmDelivery();
+    }
+}
+
+
+let confirmCalSelectedDate = "";
+let confirmCalYear = 2026;
+let confirmCalMonth = 6;
+
+function initConfirmCalendar(d) {
+    const defaultDate = d.return_delivery_date || d.order_date || new Date().toISOString().split('T')[0];
+    confirmCalSelectedDate = defaultDate;
+    const dateInput = document.getElementById('confirm-return-date');
+    if (dateInput) {
+        dateInput.value = defaultDate;
+    }
+    
+    const parts = defaultDate.split('-');
+    if (parts.length === 3) {
+        confirmCalYear = parseInt(parts[0]);
+        confirmCalMonth = parseInt(parts[1]) - 1;
+    } else {
+        const today = new Date();
+        confirmCalYear = today.getFullYear();
+        confirmCalMonth = today.getMonth();
+    }
+    
+    const prevBtn = document.getElementById('confirm-cal-prev-btn');
+    if (prevBtn) {
+        prevBtn.onclick = (e) => {
+            e.preventDefault();
+            confirmCalMonth--;
+            if (confirmCalMonth < 0) {
+                confirmCalMonth = 11;
+                confirmCalYear--;
+            }
+            renderConfirmCalendarGrid(d);
+        };
+    }
+    
+    const nextBtn = document.getElementById('confirm-cal-next-btn');
+    if (nextBtn) {
+        nextBtn.onclick = (e) => {
+            e.preventDefault();
+            confirmCalMonth++;
+            if (confirmCalMonth > 11) {
+                confirmCalMonth = 0;
+                confirmCalYear++;
+            }
+            renderConfirmCalendarGrid(d);
+        };
+    }
+    
+    renderConfirmCalendarGrid(d);
+}
+
+function renderConfirmCalendarGrid(d) {
+    const months = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ];
+    
+    const monthYearEl = document.getElementById('confirm-cal-month-year');
+    if (monthYearEl) {
+        monthYearEl.textContent = `${months[confirmCalMonth]} ${confirmCalYear}`;
+    }
+    
+    const info = getLocalidadGroupInfo(d.localidad);
+    const infoMsgEl = document.getElementById('confirm-cal-info-msg');
+    if (infoMsgEl) {
+        infoMsgEl.innerHTML = `
+            📍 Zona: <strong>${d.localidad || 'General'} (Grupo ${info.group})</strong><br>
+            📅 Días recomendados: <strong>${info.label}</strong>
+        `;
+    }
+    
+    const grid = document.getElementById('confirm-cal-days-grid');
+    if (!grid) return;
+    grid.innerHTML = "";
+    
+    const firstDay = new Date(confirmCalYear, confirmCalMonth, 1);
+    const startDayOfWeek = firstDay.getDay();
+    
+    const daysInMonth = new Date(confirmCalYear, confirmCalMonth + 1, 0).getDate();
+    const prevDaysInMonth = new Date(confirmCalYear, confirmCalMonth, 0).getDate();
+    
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+        const dayNum = prevDaysInMonth - i;
+        const cell = document.createElement('div');
+        cell.textContent = dayNum;
+        cell.style.cssText = "font-size: 11px; padding: 6px 0; text-align: center; color: var(--text-muted); opacity: 0.25; pointer-events: none;";
+        grid.appendChild(cell);
+    }
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+        const cell = document.createElement('div');
+        cell.textContent = day;
+        
+        const dateStr = `${confirmCalYear}-${String(confirmCalMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayDate = new Date(confirmCalYear, confirmCalMonth, day);
+        const dayOfWeek = dayDate.getDay();
+        
+        const isRecommended = info.days.includes(dayOfWeek);
+        const isSelected = dateStr === confirmCalSelectedDate;
+        
+        let cellStyle = "font-size: 11px; padding: 6px 0; text-align: center; border-radius: 6px; cursor: pointer; position: relative; font-weight: 500; transition: all 0.15s; color: var(--text-main);";
+        
+        let badgeDot = "";
+        if (isRecommended) {
+            cellStyle += " border: 1px dashed rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.05); color: #34d399;";
+            badgeDot = `<span style="position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background: #10b981; border-radius: 50%;"></span>`;
+        }
+        
+        if (isSelected) {
+            if (isRecommended) {
+                cellStyle += " background: #10b981 !important; color: #fff !important; font-weight: 700; border: 1px solid #10b981;";
+            } else {
+                cellStyle += " background: var(--primary) !important; color: #fff !important; font-weight: 700; border: 1px solid var(--primary);";
+            }
+        }
+        
+        cell.style.cssText = cellStyle;
+        if (badgeDot && !isSelected) {
+            cell.innerHTML = `${day}${badgeDot}`;
+        }
+        
+        cell.onclick = () => {
+            confirmCalSelectedDate = dateStr;
+            const dateInput = document.getElementById('confirm-return-date');
+            if (dateInput) {
+                dateInput.value = dateStr;
+            }
+            
+            const winSelect = document.getElementById('confirm-return-window');
+            if (winSelect) {
+                winSelect.value = info.defaultTime;
+            }
+            
+            renderConfirmCalendarGrid(d);
+        };
+        
+        cell.onmouseover = () => {
+            if (!cell.style.background.includes('var(--primary)') && !cell.style.background.includes('#10b981')) {
+                cell.style.background = isRecommended ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.08)";
+            }
+        };
+        cell.onmouseout = () => {
+            if (!cell.style.background.includes('var(--primary)') && !cell.style.background.includes('#10b981')) {
+                cell.style.background = isRecommended ? "rgba(16, 185, 129, 0.05)" : "none";
+            }
+        };
+        
+        grid.appendChild(cell);
+    }
+    
+    const totalCells = startDayOfWeek + daysInMonth;
+    const remainingCells = (7 - (totalCells % 7)) % 7;
+    for (let i = 1; i <= remainingCells; i++) {
+        const cell = document.createElement('div');
+        cell.textContent = i;
+        cell.style.cssText = "font-size: 11px; padding: 6px 0; text-align: center; color: var(--text-muted); opacity: 0.25; pointer-events: none;";
+        grid.appendChild(cell);
     }
 }
 
