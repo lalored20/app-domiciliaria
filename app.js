@@ -2887,7 +2887,7 @@ let planningCalYear = null;
 let planningCalSelectedDate = null;
 
 function getLocalidadGroupInfo(localidad) {
-    if (!localidad) return { group: 'A', days: [1, 3, 5], label: 'Lun, Mié, Vie', defaultTime: '11:00 - 14:00' };
+    if (!localidad || typeof localidad !== 'string') return { group: 'A', days: [1, 3, 5], label: 'Lun, Mié, Vie', defaultTime: '11:00 - 14:00' };
     const clean = localidad.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
     
     const grupoA = ["usaquen", "suba", "chapinero", "teusaquillo", "barrios unidos"];
@@ -3072,7 +3072,11 @@ function closePlanningModal() {
 
 async function saveDeliveryPlanning(id) {
     const d = deliveries.find(item => item.id === id);
-    if (!d) return;
+    if (!d) {
+        console.error("No se encontró la entrega en memoria con ID:", id);
+        alert("❌ Error: No se encontró la entrega en la memoria local. Intente refrescar la página.");
+        return;
+    }
     
     const newType = document.getElementById('planning-delivery-type').value;
     const newReturnDate = document.getElementById('planning-return-date').value || null;
@@ -3091,15 +3095,12 @@ async function saveDeliveryPlanning(id) {
         }
     }
     
-    if (db) {
-        try {
-            await promiseWithTimeout(db.deliveries.put(d), 1000, "Timeout al guardar planificacion");
-            addSystemLog(`✅ Planificación guardada para ${d.client_name} (${newType})`);
-        } catch (e) {
-            console.error("Error al guardar planificación en Dexie:", e);
-        }
-    } else {
-        localStorage.setItem("deliveries", JSON.stringify(deliveries));
+    try {
+        await saveDeliveries();
+        addSystemLog(`✅ Planificación guardada para ${d.client_name} (${newType})`);
+    } catch (e) {
+        console.error("Error al guardar planificación:", e);
+        alert("❌ Error al guardar en base de datos local: " + e.message);
     }
     
     alert("✅ Planificación de entrega guardada correctamente.");
