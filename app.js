@@ -410,6 +410,14 @@ function nextDay() {
     changeDay(1);
 }
 
+function goToToday() {
+    const todayStr = (currentShift && currentShift.shift_date) ? currentShift.shift_date : getColombiaDateString();
+    const dateParts = todayStr.split('-');
+    viewYear = parseInt(dateParts[0], 10);
+    viewMonth = parseInt(dateParts[1], 10) - 1;
+    selectDate(todayStr);
+}
+
 async function selectDate(date) {
     currentDate = date;
     addSystemLog(`📅 Fecha seleccionada: ${currentDate}.`);

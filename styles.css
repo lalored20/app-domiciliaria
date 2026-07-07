@@ -221,6 +221,36 @@ h1 {
     transition: all 0.2s ease;
 }
 
+/* Botón Ir a Hoy */
+.today-badge-btn {
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #a78bfa;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s ease;
+    height: 32px;
+    box-sizing: border-box;
+}
+
+.today-badge-btn:hover {
+    background: rgba(139, 92, 246, 0.22);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #c084fc;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+
+.today-badge-btn:active {
+    transform: translateY(1px);
+}
+
 /* Selector de Localidades */
 /* Wrapper de Localidades con Flechas */
 .localidad-nav-wrapper {
