@@ -1419,6 +1419,47 @@ app.post('/api/deliveries/sync', async (req, res) => {
     }
 });
 
+// Eliminar permanentemente una entrega o un retorno
+app.delete('/api/deliveries/:id', (req, res) => {
+    const id = req.params.id;
+    const isReturn = id.endsWith('_return');
+    const targetId = isReturn ? id.replace('_return', '') : id;
+    
+    if (isReturn) {
+        // Si es un retorno, borrar sólo los datos de retorno de delivery_metadata
+        appDb.run(`
+            UPDATE delivery_metadata SET 
+                return_delivery_date = NULL,
+                return_time_window = NULL,
+                return_status = NULL,
+                return_evidence_photo = NULL,
+                return_signature_drawn = NULL,
+                return_items_comments = NULL,
+                updated_at = ?
+            WHERE order_id = ?
+        `, [Math.floor(Date.now() / 1000), targetId], (err) => {
+            if (err) {
+                console.error(`❌ Error al eliminar retorno ${id} de SQLite:`, err.message);
+                return res.status(500).json({ success: false, error: err.message });
+            }
+            res.json({ success: true, message: `Retorno de orden ${targetId} eliminado.` });
+        });
+    } else {
+        // Si es la orden principal, eliminar de local_orders y de delivery_metadata
+        chatbotDb.run(`DELETE FROM local_orders WHERE id = ?`, [targetId], (err1) => {
+            if (err1) {
+                console.error(`❌ Error al eliminar orden ${targetId} de messages.db:`, err1.message);
+            }
+            appDb.run(`DELETE FROM delivery_metadata WHERE order_id = ?`, [targetId], (err2) => {
+                if (err2) {
+                    console.error(`❌ Error al eliminar metadatos ${targetId} de domiciliaria.db:`, err2.message);
+                }
+                res.json({ success: true, message: `Orden ${targetId} y sus metadatos eliminados permanentemente.` });
+            });
+        });
+    }
+});
+
 // Sincronizar Shift/Turno
 app.post('/api/shift/sync', (req, res) => {
     const shift = req.body.shift;

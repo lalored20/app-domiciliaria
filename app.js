@@ -635,7 +635,7 @@ function groupDeliveries(deliveriesArray) {
 function renderDeliveriesView(container) {
     // Filtrar todos los pedidos para la fecha seleccionada hoy, sin importar la localidad
     const filtered = deliveries
-        .filter(d => d.order_date === currentDate)
+        .filter(d => d.status !== 'ELIMINADO' && d.order_date === currentDate)
         .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
         
     const grouped = groupDeliveries(filtered);
@@ -808,7 +808,10 @@ function createDeliveryCard(d) {
                     🕒 <span>${d.time_window}</span>
                 </div>
             </div>
-            <div class="status-pill ${statusClass}">${statusLabel}</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="status-pill ${statusClass}">${statusLabel}</div>
+                <button onclick="confirmDeleteDelivery('${d.id}')" style="background: transparent; border: none; font-size: 14px; cursor: pointer; padding: 2px; line-height: 1; display: flex; align-items: center; transition: transform 0.2s; color: var(--text-muted);" onmouseover="this.style.transform='scale(1.25)'; this.style.color='#ef4444';" onmouseout="this.style.transform='scale(1)'; this.style.color='var(--text-muted)';" title="Eliminar entrega">🗑️</button>
+            </div>
         </div>
         
         <div class="card-meta-row" style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; padding: 0 4px; flex-wrap: wrap;">
@@ -930,7 +933,7 @@ function renderLifoView(container) {
 
     const itemsContainer = document.getElementById("maleta-items-container");
     const sorted = [...deliveries]
-        .filter(d => d.status !== "ENTREGADO" && d.order_date === currentDate)
+        .filter(d => d.status !== "ENTREGADO" && d.status !== "ELIMINADO" && d.order_date === currentDate)
         .sort((a, b) => {
             // Priorizar la localidad activa actual (currentLocalidad) para que vaya arriba (se entrega primero)
             const aActive = a.localidad === currentLocalidad ? 0 : 1;
@@ -1189,6 +1192,13 @@ function renderConfigView(container) {
             </div>
 
             <div class="form-group" style="border-top:1px solid var(--border); padding-top:10px;">
+                <label>🗑️ Historial de Eliminaciones</label>
+                <div id="deleted-deliveries-list" style="max-height:180px; overflow-y:auto; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:11px;">
+                    <!-- Cargando dinámicamente -->
+                </div>
+            </div>
+
+            <div class="form-group" style="border-top:1px solid var(--border); padding-top:10px;">
                 <label>Consola de Sincronización de Base de Datos</label>
                 <div class="sync-console" id="sync-console-logs" style="height:90px;"></div>
             </div>
@@ -1208,6 +1218,32 @@ function renderConfigView(container) {
     if (consoleEl) {
         consoleEl.innerHTML = logs.map(l => `<div>${l}</div>`).join('');
         consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    // Renderizar lista de eliminados
+    const deletedDeliveries = deliveries.filter(d => d.status === 'ELIMINADO');
+    const deletedEl = document.getElementById("deleted-deliveries-list");
+    if (deletedEl) {
+        if (deletedDeliveries.length === 0) {
+            deletedEl.innerHTML = `<div style="text-align:center; color:var(--text-muted); padding:10px; font-size:12px;">No hay pedidos eliminados en el historial.</div>`;
+        } else {
+            deletedEl.innerHTML = deletedDeliveries.map(d => `
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding:8px 0; gap:8px;">
+                    <div style="flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; text-align:left;">
+                        <span style="font-weight:700; color:var(--text-main); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.client_name}</span>
+                        <span style="color:var(--text-muted); font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${d.localidad || 'Sin zona'} - ${d.address}</span>
+                        <div style="display:flex; gap:6px; align-items:center; font-size:9px;">
+                            <span style="font-weight:800; color:${d.delivery_type === 'ENTREGA' ? '#3b82f6' : '#f59e0b'}">${d.delivery_type || 'RECOGIDA'}</span>
+                            <span style="color:var(--text-muted);">Fecha: ${d.order_date || 'Sin fecha'}</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:4px; shrink:0;">
+                        <button onclick="undoDeleteDelivery('${d.id}')" class="btn btn-confirm" style="padding:4px 8px; font-size:10px; height:auto; font-weight:700; box-shadow:none;" title="Restaurar pedido a su estado anterior">↩️ Restaurar</button>
+                        <button onclick="permanentlyDeleteDelivery('${d.id}')" class="btn btn-cancel" style="padding:4px 8px; font-size:10px; height:auto; color:var(--danger); border-color:rgba(239,68,68,0.2); font-weight:700; box-shadow:none;" title="Eliminar permanentemente del dispositivo y servidor">❌ Eliminar</button>
+                    </div>
+                </div>
+            `).join("");
+        }
     }
 
     loadWhatsappLogs();
@@ -1313,7 +1349,7 @@ async function optimizeRouteByProximity(silent = false) {
     }
     
     // Filtrar todos los pedidos no completados de la fecha actual
-    let pendingLoc = deliveries.filter(d => d.status !== 'ENTREGADO' && d.order_date === currentDate);
+    let pendingLoc = deliveries.filter(d => d.status !== 'ENTREGADO' && d.status !== 'ELIMINADO' && d.order_date === currentDate);
     if (pendingLoc.length <= 1) {
         if (!silent) {
             addSystemLog("ℹ️ No hay suficientes pedidos pendientes para optimizar.");
@@ -3297,6 +3333,84 @@ async function undoRecibido(id) {
     }
 }
 
+async function confirmDeleteDelivery(id) {
+    if (confirm("🗑️ ¿Estás seguro de que deseas eliminar este pedido? Podrás verlo y recuperarlo desde la pestaña Configuración > Historial de Eliminaciones.")) {
+        const d = deliveries.find(x => x.id === id);
+        if (!d) return;
+        
+        d.previous_status = d.status || "PENDIENTE";
+        d.status = "ELIMINADO";
+        d.sync_pending = true;
+        
+        try {
+            await saveDeliveries();
+            addSystemLog(`🗑️ Pedido de ${d.client_name} marcado como eliminado.`);
+            alert("🗑️ Pedido eliminado. Puedes recuperarlo en la sección de Configuración.");
+            renderContent();
+            runBackgroundSync();
+        } catch (e) {
+            console.error("Error al eliminar pedido:", e);
+            alert("❌ Error al guardar eliminación: " + e.message);
+        }
+    }
+}
+
+async function undoDeleteDelivery(id) {
+    const d = deliveries.find(x => x.id === id);
+    if (!d) return;
+    
+    d.status = d.previous_status || "PENDIENTE";
+    delete d.previous_status;
+    d.sync_pending = true;
+    
+    try {
+        await saveDeliveries();
+        addSystemLog(`↩️ Eliminación deshecha para ${d.client_name}. Estado restaurado a: ${d.status}`);
+        alert("✅ Pedido restaurado exitosamente.");
+        renderContent();
+        runBackgroundSync();
+    } catch (e) {
+        console.error("Error al deshacer eliminación:", e);
+        alert("❌ Error al restaurar pedido: " + e.message);
+    }
+}
+
+async function permanentlyDeleteDelivery(id) {
+    if (confirm("⚠️ ¿Estás seguro de que deseas eliminar permanentemente este pedido de la base de datos? Esta acción es irreversible.")) {
+        const d = deliveries.find(x => x.id === id);
+        if (!d) return;
+        
+        // Remover de la lista en memoria
+        deliveries = deliveries.filter(x => x.id !== id);
+        
+        // Guardar cambios locales
+        try {
+            await saveDeliveries();
+            addSystemLog(`❌ Pedido de ${d.client_name} eliminado permanentemente en LocalStorage.`);
+        } catch (e) {
+            console.error("Error al eliminar localmente:", e);
+        }
+        
+        // Enviar petición al servidor para eliminarlo permanentemente
+        try {
+            const res = await fetch(`/api/deliveries/${id}`, {
+                method: "DELETE"
+            });
+            if (res.ok) {
+                addSystemLog(`✅ Pedido ${id} eliminado permanentemente en el servidor.`);
+                alert("🗑️ Pedido eliminado permanentemente.");
+            } else {
+                console.error("Error en respuesta del servidor al eliminar permanente");
+            }
+        } catch (e) {
+            console.error("Error al conectar con servidor para eliminar permanente:", e);
+        }
+        
+        renderContent();
+    }
+}
+
+
 // 6. Gestión Financiera
 function recalculateShiftCash() {
     const cashCollected = deliveries
@@ -3952,7 +4066,7 @@ function renderLocalidades() {
     selector.innerHTML = "";
     
     // Solo mostrar las localidades que tienen entregas programadas para la fecha seleccionada
-    const deliveriesToday = deliveries.filter(d => d.order_date === currentDate);
+    const deliveriesToday = deliveries.filter(d => d.status !== 'ELIMINADO' && d.order_date === currentDate);
     let localidades = [...new Set(deliveriesToday.map(d => d.localidad).filter(l => typeof l === 'string' && l.trim() !== ''))];
     
     if (localidades.length === 0) {
