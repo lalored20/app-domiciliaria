@@ -3169,8 +3169,9 @@ async function saveDeliveryPlanning(id) {
     alert("✅ Planificación de entrega guardada correctamente.");
     closePlanningModal();
     
-    // Si el repartidor configuró un día de retorno, cambiamos el calendario automáticamente a ese día de entrega
-    if (newReturnDate) {
+    // Solo saltamos de fecha automáticamente si el pedido modificado es de tipo ENTREGA (reprogramación)
+    // Si es una RECOGIDA, nos quedamos en el día actual para que el repartidor pueda confirmar la recepción (firma y fotos)
+    if (newType === 'ENTREGA' && newReturnDate) {
         const parts = newReturnDate.split('-');
         if (parts.length === 3) {
             viewYear = parseInt(parts[0]);
