@@ -3093,6 +3093,33 @@ async function saveDeliveryPlanning(id) {
         if (newReturnWindow) {
             d.time_window = newReturnWindow;
         }
+        // Eliminar tarjeta de retorno si existiera
+        const returnId = d.id + "_return";
+        deliveries = deliveries.filter(x => x.id !== returnId);
+    }
+    
+    // Si sigue siendo RECOGIDA y se planifica una entrega de retorno, creamos/actualizamos la tarjeta de retorno local de inmediato
+    if (newType === 'RECOGIDA' && newReturnDate) {
+        const returnId = d.id + "_return";
+        let returnCard = deliveries.find(x => x.id === returnId);
+        if (!returnCard) {
+            returnCard = {
+                ...d,
+                id: returnId,
+                order_id: d.id,
+                chatbot_order_id: d.id,
+                delivery_type: "ENTREGA",
+                amount: 0,
+                status: "PENDIENTE",
+                sync_pending: true
+            };
+            deliveries.push(returnCard);
+        }
+        returnCard.order_date = newReturnDate;
+        returnCard.time_window = newReturnWindow || "12:00 - 15:00";
+        returnCard.return_delivery_date = newReturnDate;
+        returnCard.return_time_window = newReturnWindow;
+        returnCard.sync_pending = true;
     }
     
     try {
