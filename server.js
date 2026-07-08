@@ -383,25 +383,25 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
 function detectarLocalidadExplicita(direccion) {
     if (!direccion) return null;
     const dirUpper = direccion.toUpperCase();
-    if (dirUpper.includes("USAQUEN") || dirUpper.includes("CEDRITOS") || dirUpper.includes("SANTA BARBARA") || dirUpper.includes("CANTALEJO")) {
+    if (dirUpper.includes("USAQU") || dirUpper.includes("CEDRITOS") || dirUpper.includes("SANTA BARBARA") || dirUpper.includes("CANTALEJO")) {
         return "Usaquén";
     }
     if (dirUpper.includes("SUBA") || dirUpper.includes("NIZA") || dirUpper.includes("ALHAMBRA") || dirUpper.includes("COLINA") || dirUpper.includes("PORTALES")) {
         return "Suba";
     }
-    if (dirUpper.includes("CHAPINERO") || dirUpper.includes("CHICO") || dirUpper.includes("ROSALES") || dirUpper.includes("RETIRO")) {
+    if (dirUpper.includes("CHAPIN") || dirUpper.includes("CHICO") || dirUpper.includes("ROSALES") || dirUpper.includes("RETIRO")) {
         return "Chapinero";
     }
-    if (dirUpper.includes("TEUSAQUILLO") || dirUpper.includes("SALITRE") || dirUpper.includes("GALERIAS") || dirUpper.includes("QUINTA PAREDES")) {
+    if (dirUpper.includes("TEUSAQ") || dirUpper.includes("SALITRE") || dirUpper.includes("GALERIAS") || dirUpper.includes("QUINTA PAREDES")) {
         return "Teusaquillo";
     }
-    if (dirUpper.includes("BARRIOS UNIDOS") || dirUpper.includes("CASTELLANA") || dirUpper.includes("METROPOLIS") || dirUpper.includes("POLO")) {
+    if (dirUpper.includes("BARRIOS U") || dirUpper.includes("CASTELLANA") || dirUpper.includes("METROPOLIS") || dirUpper.includes("POLO")) {
         return "Barrios Unidos";
     }
-    if (dirUpper.includes("ENGATIVA") || dirUpper.includes("BOCHICA") || dirUpper.includes("ALAMOS") || dirUpper.includes("MINUTO DE DIOS")) {
+    if (dirUpper.includes("ENGATIV") || dirUpper.includes("BOCHICA") || dirUpper.includes("ALAMOS") || dirUpper.includes("MINUTO DE DIOS")) {
         return "Engativá";
     }
-    if (dirUpper.includes("FONTIBON") || dirUpper.includes("MODELIA") || dirUpper.includes("HAYUELOS") || dirUpper.includes("ZONA FRANCA")) {
+    if (dirUpper.includes("FONTIB") || dirUpper.includes("MODELIA") || dirUpper.includes("HAYUELOS") || dirUpper.includes("ZONA FRANCA")) {
         return "Fontibón";
     }
     if (dirUpper.includes("KENNEDY") || dirUpper.includes("CASTILLA") || dirUpper.includes("AMERICAS") || dirUpper.includes("TINTAL") || dirUpper.includes("TIERRA BUENA") || dirUpper.includes("TIERRABUENA") || dirUpper.includes("PATIO BONITO") || dirUpper.includes("CANDALAIMA")) {
@@ -410,16 +410,16 @@ function detectarLocalidadExplicita(direccion) {
     if (dirUpper.includes("BOSA") || dirUpper.includes("RECREO")) {
         return "Bosa";
     }
-    if (dirUpper.includes("PUENTE ARANDA") || dirUpper.includes("SALAZAR GOMEZ") || dirUpper.includes("MUZU")) {
+    if (dirUpper.includes("PUENTE A") || dirUpper.includes("SALAZAR GOMEZ") || dirUpper.includes("MUZU")) {
         return "Puente Aranda";
     }
     if (dirUpper.includes("USME") || dirUpper.includes("SAN ANTONIO ELIAS") || dirUpper.includes("SAN ANTONIO") || dirUpper.includes("AVISUR") || dirUpper.includes("VIRREY")) {
         return "Usme";
     }
-    if (dirUpper.includes("CIUDAD BOLIVAR") || dirUpper.includes("MADRIGAL")) {
+    if (dirUpper.includes("CIUDAD B") || dirUpper.includes("MADRIGAL")) {
         return "Ciudad Bolívar";
     }
-    if (dirUpper.includes("SAN CRISTOBAL") || dirUpper.includes("20 DE JULIO")) {
+    if (dirUpper.includes("SAN CRIST") || dirUpper.includes("20 DE JULIO")) {
         return "San Cristóbal";
     }
     return null;
