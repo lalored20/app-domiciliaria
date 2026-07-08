@@ -847,7 +847,7 @@ function createDeliveryCard(d) {
                     ${formatShortAddress(d.address)}
                 </span>
             </div>
-            ${d.return_delivery_date ? `
+            ${(d.return_delivery_date && d.delivery_type !== 'ENTREGA') ? `
                 <div class="return-schedule-badge" style="font-size: 10px; font-weight: 700; color: #5cd4ff; background: rgba(92, 212, 255, 0.05); border: 1px solid rgba(92, 212, 255, 0.15); padding: 4px 8px; border-radius: 6px; margin-top: 6px; display: flex; align-items: center; gap: 4px; line-height: 1.2;">
                     🔄 ENTREGA PACTADA: ${d.return_delivery_date} (${d.return_time_window || 'Sin franja'})
                 </div>
