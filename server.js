@@ -44,7 +44,7 @@ if (supabaseUrl && supabaseServiceKey) {
 
 const sqlite3 = require('sqlite3').verbose();
 const https = require('https');
-const CHATBOT_DB_PATH = 'C:\\Users\\rmend\\Desktop\\Whatsapp Original\\data\\messages.db';
+const CHATBOT_DB_PATH = 'C:\\Users\\rmend\\Desktop\\Whatsapp Original\\data\\messages_new.db';
 const APP_DB_PATH = path.join(__dirname, 'domiciliaria.db');
 
 // Obtener fecha actual en formato local YYYY-MM-DD para Colombia (UTC-5)
