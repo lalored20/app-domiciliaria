@@ -1328,8 +1328,8 @@ app.post('/api/deliveries/sync', async (req, res) => {
                             order_id, time_window, expected_items, collected_items, 
                             evidence_photo, signature_drawn, latitude, longitude, 
                             delivery_date, items_comments, updated_at, delivery_type, 
-                            return_delivery_date, return_time_window
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            return_delivery_date, return_time_window, resolved_localidad, resolved_address
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(order_id) DO UPDATE SET
                             time_window = excluded.time_window,
                             expected_items = excluded.expected_items,
@@ -1343,7 +1343,9 @@ app.post('/api/deliveries/sync', async (req, res) => {
                             updated_at = excluded.updated_at,
                             delivery_type = excluded.delivery_type,
                             return_delivery_date = excluded.return_delivery_date,
-                            return_time_window = excluded.return_time_window
+                            return_time_window = excluded.return_time_window,
+                            resolved_localidad = COALESCE(excluded.resolved_localidad, delivery_metadata.resolved_localidad),
+                            resolved_address = COALESCE(excluded.resolved_address, delivery_metadata.resolved_address)
                         WHERE excluded.updated_at >= delivery_metadata.updated_at OR delivery_metadata.updated_at IS NULL
                     `, [
                         clientD.id,
@@ -1359,7 +1361,9 @@ app.post('/api/deliveries/sync', async (req, res) => {
                         clientUpdatedAt,
                         clientD.delivery_type || "RECOGIDA",
                         clientD.return_delivery_date || null,
-                        clientD.return_time_window || null
+                        clientD.return_time_window || null,
+                        clientD.localidad || null,
+                        clientD.address || null
                     ], (err) => {
                         if (err) {
                             console.error(`❌ Error guardando metadatos en domiciliaria.db para ${clientD.id}:`, err.message);

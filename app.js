@@ -4037,12 +4037,11 @@ async function runBackgroundSync() {
                                 localItem.collected_items !== serverD.collected_items ||
                                 (serverD.facade_photo && localItem.facade_photo !== serverD.facade_photo) ||
                                 (serverD.facade_latitude && localItem.facade_latitude !== serverD.facade_latitude) ||
-                                (serverD.facade_photo && localItem.facade_photo !== serverD.facade_photo) ||
-                                (serverD.facade_latitude && localItem.facade_latitude !== serverD.facade_latitude) ||
                                 (serverD.facade_longitude && localItem.facade_longitude !== serverD.facade_longitude) ||
                                 localItem.delivery_type !== serverD.delivery_type ||
                                 localItem.return_delivery_date !== serverD.return_delivery_date ||
-                                localItem.return_time_window !== serverD.return_time_window
+                                localItem.return_time_window !== serverD.return_time_window ||
+                                localItem.order_date !== serverD.order_date
                             )) {
                                 localItem.client_phone = serverD.client_phone;
                                 localItem.latitude = serverD.latitude;
@@ -4054,6 +4053,7 @@ async function runBackgroundSync() {
                                 localItem.delivery_type = serverD.delivery_type;
                                 localItem.return_delivery_date = serverD.return_delivery_date;
                                 localItem.return_time_window = serverD.return_time_window;
+                                localItem.order_date = serverD.order_date;
                                 
                                 if (serverD.facade_photo) localItem.facade_photo = serverD.facade_photo;
                                 if (serverD.facade_latitude) localItem.facade_latitude = serverD.facade_latitude;
