@@ -4041,7 +4041,8 @@ async function runBackgroundSync() {
                                 localItem.delivery_type !== serverD.delivery_type ||
                                 localItem.return_delivery_date !== serverD.return_delivery_date ||
                                 localItem.return_time_window !== serverD.return_time_window ||
-                                localItem.order_date !== serverD.order_date
+                                localItem.order_date !== serverD.order_date ||
+                                JSON.stringify(localItem.items) !== JSON.stringify(serverD.items)
                             )) {
                                 localItem.client_phone = serverD.client_phone;
                                 localItem.latitude = serverD.latitude;
@@ -4054,6 +4055,7 @@ async function runBackgroundSync() {
                                 localItem.return_delivery_date = serverD.return_delivery_date;
                                 localItem.return_time_window = serverD.return_time_window;
                                 localItem.order_date = serverD.order_date;
+                                localItem.items = serverD.items;
                                 
                                 if (serverD.facade_photo) localItem.facade_photo = serverD.facade_photo;
                                 if (serverD.facade_latitude) localItem.facade_latitude = serverD.facade_latitude;
@@ -4148,6 +4150,7 @@ async function runBackgroundSync() {
                                     localItem.return_time_window = item.return_time_window;
                                     localItem.items_comments = item.items_comments;
                                     localItem.collected_items = item.collected_items;
+                                    localItem.items = item.items;
                                 }
                             } else {
                                 currentLocalStorageD.push(item);
