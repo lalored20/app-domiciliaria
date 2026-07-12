@@ -4109,7 +4109,9 @@ async function runBackgroundSync() {
                     }
                     
                     if (isUsingLocalStorage) {
-                        const currentLocalStorageD = JSON.parse(localStorage.getItem("deliveries") || "[]");
+                        let currentLocalStorageD = JSON.parse(localStorage.getItem("deliveries") || "[]");
+                        const localIds = new Set(localD.map(x => x.id));
+                        currentLocalStorageD = currentLocalStorageD.filter(x => localIds.has(x.id));
                         
                         localD.forEach(item => {
                             const idx = currentLocalStorageD.findIndex(x => x.id === item.id);
@@ -4135,6 +4137,17 @@ async function runBackgroundSync() {
                                     localItem.facade_photo = item.facade_photo;
                                     localItem.facade_latitude = item.facade_latitude;
                                     localItem.facade_longitude = item.facade_longitude;
+                                    localItem.localidad = item.localidad;
+                                    localItem.delivery_type = item.delivery_type;
+                                    localItem.order_date = item.order_date;
+                                    localItem.latitude = item.latitude;
+                                    localItem.longitude = item.longitude;
+                                    localItem.address = item.address;
+                                    localItem.client_phone = item.client_phone;
+                                    localItem.return_delivery_date = item.return_delivery_date;
+                                    localItem.return_time_window = item.return_time_window;
+                                    localItem.items_comments = item.items_comments;
+                                    localItem.collected_items = item.collected_items;
                                 }
                             } else {
                                 currentLocalStorageD.push(item);
