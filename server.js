@@ -61,6 +61,15 @@ function epochToColombiaDateString(epoch) {
     return formatter.format(new Date(epoch * 1000));
 }
 
+// Sanear strings de fecha que contengan una estampa de tiempo ISO (ej: 2026-07-15T16:00:00.000Z)
+function sanitizeDateString(d) {
+    if (!d || typeof d !== 'string') return d;
+    if (d.includes('T')) {
+        return d.split('T')[0];
+    }
+    return d;
+}
+
 // Coordenadas aproximadas de centros de localidades de Bogotá
 function getLocalidadCenterCoords(localidad) {
     const coords = {
@@ -782,7 +791,7 @@ function getMergedDeliveries() {
                             parsedTimeWindow = parsed.timeWindow;
                         }
 
-                        const finalOrderDate = meta.delivery_date || o.scheduledDate || parsedDate || dateStr;
+                        const finalOrderDate = sanitizeDateString(meta.delivery_date || o.scheduledDate || parsedDate || dateStr);
                         const finalTimeWindow = meta.time_window || parsedTimeWindow || "10:00 - 12:00";
 
                         // 1. Agregar la recogida principal
@@ -1738,7 +1747,7 @@ function startBackgroundGeocoding() {
                                 appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', nowEpoch, orderToGeocode.id]);
                             } else {
                                 const parsedChat = extraerFechaYHoraDelChat(orderToGeocode.chatTranscription, orderToGeocode.created_at);
-                                const finalDate = orderToGeocode.scheduledDate || parsedChat.date || getColombiaDateString();
+                                const finalDate = sanitizeDateString(orderToGeocode.scheduledDate || parsedChat.date || getColombiaDateString());
                                 const returnSched = calcularFechaRetornoProgramada(finalDate, 'Usaquén', orderToGeocode.chatTranscription);
                                 appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', finalDate, nowEpoch, returnSched.date, returnSched.timeWindow]);
                             }
@@ -1782,7 +1791,7 @@ function startBackgroundGeocoding() {
                                     appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [lat, lon, resolvedAddress, resolvedLocalidad, nowEpoch, orderToGeocode.id]);
                                 } else {
                                     const parsedChat = extraerFechaYHoraDelChat(orderToGeocode.chatTranscription, orderToGeocode.created_at);
-                                    const finalDate = orderToGeocode.scheduledDate || parsedChat.date || getColombiaDateString();
+                                    const finalDate = sanitizeDateString(orderToGeocode.scheduledDate || parsedChat.date || getColombiaDateString());
                                     const returnSched = calcularFechaRetornoProgramada(finalDate, resolvedLocalidad, orderToGeocode.chatTranscription);
                                     appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, lat, lon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch, returnSched.date, returnSched.timeWindow]);
                                 }
@@ -1824,7 +1833,7 @@ function startBackgroundGeocoding() {
                                 });
                             } else {
                                 const parsedChat = extraerFechaYHoraDelChat(orderToGeocode.chatTranscription, orderToGeocode.created_at);
-                                const finalDate = orderToGeocode.scheduledDate || parsedChat.date || getColombiaDateString();
+                                const finalDate = sanitizeDateString(orderToGeocode.scheduledDate || parsedChat.date || getColombiaDateString());
                                 const returnSched = calcularFechaRetornoProgramada(finalDate, resolvedLocalidad, orderToGeocode.chatTranscription);
                                 appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch, returnSched.date, returnSched.timeWindow], (err) => {
                                     if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
@@ -1861,7 +1870,7 @@ function startBackgroundGeocoding() {
                             if (!err && historicalMeta) {
                                 const nowEpoch = Math.floor(Date.now() / 1000);
                                 const parsedChat = extraerFechaYHoraDelChat(order.chatTranscription, order.created_at);
-                                const finalDate = order.scheduledDate || parsedChat.date || getColombiaDateString();
+                                const finalDate = sanitizeDateString(order.scheduledDate || parsedChat.date || getColombiaDateString());
                                 const explicitLocalidad = detectarLocalidadExplicita(order.clientAddress);
                                 const finalLocalidad = explicitLocalidad || historicalMeta.resolved_localidad || "Usaquén";
                                 const returnSched = calcularFechaRetornoProgramada(finalDate, finalLocalidad, order.chatTranscription);
