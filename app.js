@@ -872,15 +872,17 @@ function createDeliveryCard(d) {
         
         let startButton = "";
         if (d.status === "PENDIENTE") {
+            const btnText = d.delivery_type === "RECOGIDA" ? "Iniciar Recogida" : "Iniciar Entrega";
             startButton = `
                 <button class="btn btn-deliver" onclick="startRoute('${orderIdsCsv}')">
-                    🏍️ Iniciar Entrega (En Ruta)
+                    🏍️ ${btnText} (En Ruta)
                 </button>
             `;
         } else {
+            const btnText = d.delivery_type === "RECOGIDA" ? "Confirmar Recibida" : "Confirmar Entrega";
             startButton = `
                 <button class="btn btn-deliver" onclick="openConfirmModal('${orderIdsCsv}')">
-                    📦 Confirmar Recibido / Entrega
+                    📦 ${btnText}
                 </button>
             `;
         }
