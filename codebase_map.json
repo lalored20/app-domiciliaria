@@ -12,8 +12,32 @@
     "ext": ".md"
   },
   {
+    "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\check_api_response.js",
+    "rel_path": "check_api_response.js",
+    "project": "APP DOMICILIARIA",
+    "ext": ".js"
+  },
+  {
+    "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\check_metadata.js",
+    "rel_path": "check_metadata.js",
+    "project": "APP DOMICILIARIA",
+    "ext": ".js"
+  },
+  {
+    "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\dexie.min.js",
+    "rel_path": "dexie.min.js",
+    "project": "APP DOMICILIARIA",
+    "ext": ".js"
+  },
+  {
     "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\server.js",
     "rel_path": "server.js",
+    "project": "APP DOMICILIARIA",
+    "ext": ".js"
+  },
+  {
+    "full_path": "C:\\Users\\rmend\\Desktop\\APP DOMICILIARIA\\supabase.min.js",
+    "rel_path": "supabase.min.js",
     "project": "APP DOMICILIARIA",
     "ext": ".js"
   },

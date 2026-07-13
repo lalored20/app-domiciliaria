@@ -872,17 +872,15 @@ function createDeliveryCard(d) {
         
         let startButton = "";
         if (d.status === "PENDIENTE") {
-            const btnText = d.delivery_type === "RECOGIDA" ? "Iniciar Recogida" : "Iniciar Entrega";
             startButton = `
                 <button class="btn btn-deliver" onclick="startRoute('${orderIdsCsv}')">
-                    🏍️ ${btnText} (En Ruta)
+                    🏍️ Iniciar Entrega (En Ruta)
                 </button>
             `;
         } else {
-            const btnText = d.delivery_type === "RECOGIDA" ? "Confirmar Recibida" : "Confirmar Entrega";
             startButton = `
                 <button class="btn btn-deliver" onclick="openConfirmModal('${orderIdsCsv}')">
-                    📦 ${btnText}
+                    📦 Confirmar Recibido / Entrega
                 </button>
             `;
         }
@@ -4030,12 +4028,16 @@ async function runBackgroundSync() {
                                 localChanged = true;
                             }
                             if (!localItem.sync_pending && (
+                                localItem.client_name !== serverD.client_name ||
                                 localItem.client_phone !== serverD.client_phone ||
                                 localItem.latitude !== serverD.latitude ||
                                 localItem.longitude !== serverD.longitude ||
                                 localItem.address !== serverD.address ||
                                 localItem.localidad !== serverD.localidad ||
+                                localItem.time_window !== serverD.time_window ||
+                                localItem.amount !== serverD.amount ||
                                 localItem.items_comments !== serverD.items_comments ||
+                                localItem.expected_items !== serverD.expected_items ||
                                 localItem.collected_items !== serverD.collected_items ||
                                 (serverD.facade_photo && localItem.facade_photo !== serverD.facade_photo) ||
                                 (serverD.facade_latitude && localItem.facade_latitude !== serverD.facade_latitude) ||
@@ -4046,12 +4048,16 @@ async function runBackgroundSync() {
                                 localItem.order_date !== serverD.order_date ||
                                 JSON.stringify(localItem.items) !== JSON.stringify(serverD.items)
                             )) {
+                                localItem.client_name = serverD.client_name;
                                 localItem.client_phone = serverD.client_phone;
                                 localItem.latitude = serverD.latitude;
                                 localItem.longitude = serverD.longitude;
                                 localItem.address = serverD.address;
                                 localItem.localidad = serverD.localidad;
+                                localItem.time_window = serverD.time_window;
+                                localItem.amount = serverD.amount;
                                 localItem.items_comments = serverD.items_comments;
+                                localItem.expected_items = serverD.expected_items;
                                 localItem.collected_items = serverD.collected_items;
                                 localItem.delivery_type = serverD.delivery_type;
                                 localItem.return_delivery_date = serverD.return_delivery_date;
@@ -4138,21 +4144,25 @@ async function runBackgroundSync() {
                                 // Para el resto de campos (estados, fotos, coordenadas), protegemos si hay cambios locales "en vuelo"
                                 if (!localItem.sync_pending) {
                                     localItem.status = item.status;
-                                    localItem.facade_photo = item.facade_photo;
-                                    localItem.facade_latitude = item.facade_latitude;
-                                    localItem.facade_longitude = item.facade_longitude;
-                                    localItem.localidad = item.localidad;
-                                    localItem.delivery_type = item.delivery_type;
-                                    localItem.order_date = item.order_date;
+                                    localItem.client_name = item.client_name;
+                                    localItem.client_phone = item.client_phone;
                                     localItem.latitude = item.latitude;
                                     localItem.longitude = item.longitude;
                                     localItem.address = item.address;
-                                    localItem.client_phone = item.client_phone;
+                                    localItem.localidad = item.localidad;
+                                    localItem.time_window = item.time_window;
+                                    localItem.amount = item.amount;
+                                    localItem.expected_items = item.expected_items;
+                                    localItem.collected_items = item.collected_items;
+                                    localItem.items_comments = item.items_comments;
+                                    localItem.delivery_type = item.delivery_type;
                                     localItem.return_delivery_date = item.return_delivery_date;
                                     localItem.return_time_window = item.return_time_window;
-                                    localItem.items_comments = item.items_comments;
-                                    localItem.collected_items = item.collected_items;
+                                    localItem.order_date = item.order_date;
                                     localItem.items = item.items;
+                                    localItem.facade_photo = item.facade_photo;
+                                    localItem.facade_latitude = item.facade_latitude;
+                                    localItem.facade_longitude = item.facade_longitude;
                                 }
                             } else {
                                 currentLocalStorageD.push(item);

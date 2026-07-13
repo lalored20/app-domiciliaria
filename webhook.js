@@ -95,6 +95,12 @@ app.post('/api/webhook/order', async (req, res) => {
 
     const prendasEsperadas = parseInt(expected_items) || 1;
 
+    let calculatedFallbackWindow = "11:00 - 14:00";
+    if (localidad) {
+        const isB = ["Kennedy", "Engativá", "Fontibón", "Puente Aranda", "Bosa", "Usme", "Ciudad Bolívar", "San Cristóbal", "Rafael Uribe", "Antonio Nariño", "Tunjuelito"].some(loc => localidad.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(loc.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()));
+        calculatedFallbackWindow = isB ? "12:00 - 15:00" : "11:00 - 14:00";
+    }
+
     // 3. Payload para Supabase
     const payload = {
         chatbot_order_id: order_id, // Idempotencia reforzada por restricción UNIQUE en la base de datos
@@ -102,7 +108,7 @@ app.post('/api/webhook/order', async (req, res) => {
         client_phone: client_phone.replace(/\D/g, ''), // Limpiar caracteres no numéricos
         delivery_address: address,
         localidad,
-        time_window: time_window || "10:00 - 12:00", // Ventana por defecto
+        time_window: time_window || calculatedFallbackWindow, // Ventana por defecto coherente con macro-zona
         amount: parseFloat(amount) || 0.00,
         pay_method: pay_method || 'Efectivo',
         status: 'PENDIENTE',

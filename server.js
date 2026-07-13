@@ -158,10 +158,23 @@ function formatColombianAddress(addr) {
 // Ejecutar una consulta directa a OpenStreetMap Nominatim
 function queryNominatim(query) {
     return new Promise((resolve) => {
+        const explicitLoc = detectarLocalidadExplicita(query);
         let cleanQuery = query;
-        // Eliminar apartamentos, casas, etc. para la consulta de búsqueda
-        cleanQuery = cleanQuery.replace(/(apto|apartamento|casa|piso|bloque|conjunto|interior|torre|barrio).*$/i, '').trim();
         
+        // Remover paréntesis (como indicaciones de barrio o cruce secundario)
+        cleanQuery = cleanQuery.replace(/\([^)]*\)/g, '').trim();
+        
+        // Eliminar apartamentos, casas, bodegas, etc. para la consulta de búsqueda
+        cleanQuery = cleanQuery.replace(/(apto|apartamento|casa|piso|bloque|conjunto|interior|torre|barrio|bodega|local|oficina|sector|manzana|mz|etapa).*$/i, '').trim();
+        
+        // Remover comas, guiones o espacios sobrantes al final
+        cleanQuery = cleanQuery.replace(/[,-\s]+$/, '').trim();
+        
+        // Si se detectó una localidad explícita, y no está ya contenida en la consulta limpia, anexarla
+        if (explicitLoc && !cleanQuery.toLowerCase().includes(explicitLoc.toLowerCase())) {
+            cleanQuery += `, ${explicitLoc}`;
+        }
+
         // Reemplazar palabras de número en español
         cleanQuery = cleanQuery.replace(/n[uú]mero\s*/ig, ' ');
         cleanQuery = cleanQuery.replace(/nro\.?\s*/ig, ' ');
@@ -330,6 +343,11 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
             appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN items_comments TEXT`, (err) => {
                 // Silenciar error si la columna ya existe
             });
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN veracity_name TEXT`, (err) => {});
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN veracity_address TEXT`, (err) => {});
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN veracity_pickup_date TEXT`, (err) => {});
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN veracity_time_window TEXT`, (err) => {});
+            appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN veracity_total_value REAL`, (err) => {});
             appDb.run(`ALTER TABLE delivery_metadata ADD COLUMN delivery_type TEXT DEFAULT 'RECOGIDA'`, (err) => {
                 // Silenciar error si la columna ya existe
             });
@@ -391,7 +409,7 @@ const appDb = new sqlite3.Database(APP_DB_PATH, sqlite3.OPEN_READWRITE | sqlite3
 
 function detectarLocalidadExplicita(direccion) {
     if (!direccion) return null;
-    const dirUpper = direccion.toUpperCase();
+    const dirUpper = direccion.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     if (dirUpper.includes("USAQU") || dirUpper.includes("CEDRITOS") || dirUpper.includes("SANTA BARBARA") || dirUpper.includes("CANTALEJO")) {
         return "Usaquén";
     }
@@ -431,13 +449,31 @@ function detectarLocalidadExplicita(direccion) {
     if (dirUpper.includes("SAN CRIST") || dirUpper.includes("20 DE JULIO")) {
         return "San Cristóbal";
     }
+    if (dirUpper.includes("MARTIRES")) {
+        return "Los Mártires";
+    }
+    if (dirUpper.includes("SANTA FE") || dirUpper.includes("SANTAFE")) {
+        return "Santa Fe";
+    }
+    if (dirUpper.includes("TUNJUELITO")) {
+        return "Tunjuelito";
+    }
+    if (dirUpper.includes("ANTONIO NARINO")) {
+        return "Antonio Nariño";
+    }
+    if (dirUpper.includes("CANDELARIA")) {
+        return "La Candelaria";
+    }
+    if (dirUpper.includes("RAFAEL URIBE")) {
+        return "Rafael Uribe Uribe";
+    }
     return null;
 }
 
 // Clasificación básica de Localidades
 function detectarLocalidad(direccion, lat, lon) {
     if (direccion) {
-        const dirUpper = direccion.toUpperCase();
+        const dirUpper = direccion.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         if (dirUpper.includes("USAQUEN") || dirUpper.includes("CEDRITOS") || dirUpper.includes("SANTA BARBARA") || dirUpper.includes("CANTALEJO")) {
             return "Usaquén";
         }
@@ -476,6 +512,24 @@ function detectarLocalidad(direccion, lat, lon) {
         }
         if (dirUpper.includes("SAN CRISTOBAL") || dirUpper.includes("20 DE JULIO")) {
             return "San Cristóbal";
+        }
+        if (dirUpper.includes("MARTIRES")) {
+            return "Los Mártires";
+        }
+        if (dirUpper.includes("SANTA FE") || dirUpper.includes("SANTAFE")) {
+            return "Santa Fe";
+        }
+        if (dirUpper.includes("TUNJUELITO")) {
+            return "Tunjuelito";
+        }
+        if (dirUpper.includes("ANTONIO NARINO")) {
+            return "Antonio Nariño";
+        }
+        if (dirUpper.includes("CANDELARIA")) {
+            return "La Candelaria";
+        }
+        if (dirUpper.includes("RAFAEL URIBE")) {
+            return "Rafael Uribe Uribe";
         }
     }
 
@@ -561,12 +615,62 @@ function esDireccionSimilar(addr1, addr2) {
     return true;
 }
 
+// Analizar la transcripción del chat para extraer detalles del resumen del pedido de forma estructurada
+function parseResumenFromChat(transcription) {
+    const result = {};
+    if (!transcription) return result;
+    
+    const lines = transcription.split('\n');
+    let inSummary = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const lower = line.toLowerCase();
+        
+        // Detectar inicio de bloque de resumen
+        if (lower.includes("resumen del pedido") || lower.includes("resumen de tu pedido") || lower.includes("detalles del pedido")) {
+            inSummary = true;
+            continue;
+        }
+        
+        if (inSummary) {
+            // Un punto de viñeta como: • *Cliente*: Carlos Arboleda o • Cliente: Carlos Arboleda
+            const match = line.match(/^\s*[-•*+]\s*\*?([A-Za-zñáéíóúüñ\s]+)\*?\s*:\s*(.+)$/i);
+            if (match) {
+                const key = match[1].trim().toLowerCase();
+                let val = match[2].replace(/\*+/g, '').trim(); // Remover asteriscos de negrita
+                
+                if (key.includes("cliente")) {
+                    result.clientName = val;
+                } else if (key.includes("direcci")) {
+                    result.clientAddress = val;
+                } else if (key.includes("recogida")) {
+                    result.pickupText = val;
+                } else if (key.includes("total")) {
+                    result.totalText = val;
+                } else if (key.includes("servicio")) {
+                    result.serviceText = val;
+                } else if (key.includes("entrega")) {
+                    result.deliveryText = val;
+                }
+            }
+        }
+    }
+    
+    return result;
+}
+
 // Extraer dinámicamente fecha y hora de la transcripción del chat si están ausentes de forma estructurada
 function extraerFechaYHoraDelChat(transcription, createdEpoch) {
     const result = { date: null, timeWindow: null };
     if (!transcription) return result;
     
-    const dateMatch = transcription.match(/Recogida[^*:\n\r]*[*:]?\s*([^0-9\n\r]+?)\s+(\d+)\s+de\s+([A-Za-záéíóúñ]+)/i);
+    // Buscar si hay un resumen del pedido estructurado primero
+    const parsed = parseResumenFromChat(transcription);
+    const sourceText = parsed.pickupText || transcription;
+    
+    // Regex de fecha mejorado para soportar con/sin prefijo "Recogida"
+    const dateMatch = sourceText.match(/(?:Recogida[^*:\n\r]*[*:]?\s*)?([^0-9\n\r]*?)\s+(\d+)\s+de\s+([A-Za-záéíóúñ]+)/i);
     if (dateMatch) {
         const day = parseInt(dateMatch[2]);
         const monthStr = dateMatch[3].toLowerCase();
@@ -585,18 +689,30 @@ function extraerFechaYHoraDelChat(transcription, createdEpoch) {
         result.date = `${year}-${month}-${formattedDay}`;
     }
     
-    const timeMatch = transcription.match(/entre\s+(\d+:\d+\s*[A-Z.]+)\s+y\s+(\d+:\d+\s*[A-Z.]+)/i);
-    if (timeMatch) {
-        const start = timeMatch[1].replace(/\s+/g, '').toUpperCase();
+    // Regex de rango de hora robusto
+    const rangeMatch = sourceText.match(/(?:entre\s+(?:las\s+)?)?(\d+(?::\d+)?\s*(?:am|pm|am\.|pm\.)?)\s*(?:y\s*(?:las\s+)?|a\s+)(\d+(?::\d+)?\s*(?:am|pm|am\.|pm\.)?)/i);
+    if (rangeMatch) {
+        let startText = rangeMatch[1].replace(/[\s.]+/g, '').toLowerCase();
         
-        if (start.includes("8:00AM") || start.includes("8AM")) {
+        if (!startText.includes(":")) {
+            startText = startText.replace(/^(\d+)/, '$1:00');
+        }
+        
+        // Strip leading zero for matching consistency (e.g. 08:00am -> 8:00am)
+        startText = startText.replace(/^0/, '');
+        
+        if (startText.startsWith("8:00") && startText.includes("am")) {
             result.timeWindow = "08:00 - 11:00";
-        } else if (start.includes("11:00AM") || start.includes("11AM")) {
+        } else if (startText.startsWith("11:00") && startText.includes("am")) {
             result.timeWindow = "11:00 - 14:00";
-        } else if (start.includes("9:00AM") || start.includes("9AM")) {
+        } else if (startText.startsWith("9:00") && startText.includes("am")) {
             result.timeWindow = "09:00 - 12:00";
-        } else if (start.includes("12:00PM") || start.includes("12PM") || start.includes("12:00")) {
+        } else if (startText.startsWith("12:00") && (startText.includes("pm") || startText.includes("12:00"))) {
             result.timeWindow = "12:00 - 15:00";
+        } else if (startText.startsWith("8:00") && !startText.includes("pm") && !startText.includes("am")) {
+            result.timeWindow = "08:00 - 11:00";
+        } else if (startText.startsWith("11:00") && !startText.includes("pm") && !startText.includes("am")) {
+            result.timeWindow = "11:00 - 14:00";
         }
     }
     
@@ -610,10 +726,10 @@ function calcularFechaRetornoProgramada(recogidaDateStr, localidad, transcriptio
     
     // Grupo A: Norte y Centro (Lunes=1, Miércoles=3, Viernes=5)
     // Grupo B: Occidente y Sur (Martes=2, Jueves=4, Sábado=6)
-    const grupoA = ["Usaquén", "Suba", "Chapinero", "Teusaquillo", "Barrios Unidos"];
-    const grupoB = ["Kennedy", "Engativá", "Fontibón", "Puente Aranda", "Bosa", "Usme", "Ciudad Bolívar", "San Cristóbal", "Rafael Uribe"];
+    const grupoA = ["Usaquén", "Suba", "Chapinero", "Teusaquillo", "Barrios Unidos", "Los Mártires", "Mártires", "Santa Fe", "La Candelaria"];
+    const grupoB = ["Kennedy", "Engativá", "Fontibón", "Puente Aranda", "Bosa", "Usme", "Ciudad Bolívar", "San Cristóbal", "Rafael Uribe", "Antonio Nariño", "Tunjuelito"];
     
-    const isGrupoB = grupoB.some(loc => localidad && localidad.toLowerCase().includes(loc.toLowerCase()));
+    const isGrupoB = grupoB.some(loc => localidad && localidad.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(loc.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()));
     const validDays = isGrupoB ? [2, 4, 6] : [1, 3, 5];
     const defaultTimeWindow = isGrupoB ? "12:00 - 15:00" : "11:00 - 14:00";
     
@@ -681,6 +797,174 @@ function calcularFechaRetornoProgramada(recogidaDateStr, localidad, transcriptio
     }
     
     return { date: dateStr, timeWindow };
+}
+
+
+// Analizar el texto de servicios del resumen de chat para extraer prendas e items
+function parseItemsFromServiceText(serviceText) {
+    const items = [];
+    if (!serviceText) return items;
+    
+    // Separar por "+" o "y" o comas
+    const parts = serviceText.split(/\s*[\+\,]\s*|\s+y\s+/i);
+    
+    parts.forEach((part, index) => {
+        const text = part.replace(/^\s*[-•*+]\s*/, '').trim();
+        if (!text) return;
+        
+        let quantity = 1;
+        let type = text;
+        let price = 0;
+        
+        // Detectar si empieza con cantidad, ej: "2 Chaquetas Gruesas" o "2x Chaquetas" o "2 x Chaquetas"
+        const qtyMatch = text.match(/^(\d+)\s*(?:x|\s)\s*(.+)$/i);
+        if (qtyMatch) {
+            quantity = parseInt(qtyMatch[1]);
+            type = qtyMatch[2].trim();
+        }
+        
+        // Normalizar tipos comunes de planes y prendas
+        const lowerType = type.toLowerCase();
+        if (lowerType.includes("plan básico lavaseco") || lowerType.includes("plan basico lavaseco")) {
+            type = "Plan Básico Lavaseco (1 Maleta)";
+            price = 119900;
+        } else if (lowerType.includes("plan pro lavaseco")) {
+            type = "Plan Pro Lavaseco (1 Maleta Grande)";
+            price = 219900;
+        } else if (lowerType.includes("plan básico zapatos") || lowerType.includes("plan basico zapatos")) {
+            type = "Plan Básico Zapatos (2 Pares)";
+            price = 54900;
+        } else if (lowerType.includes("plan pro zapatos")) {
+            type = "Plan Pro Zapatos (3 Pares)";
+            price = 77900;
+        } else if (lowerType.includes("plan premium zapatos")) {
+            type = "Plan Premium Zapatos (4 Pares)";
+            price = 99900;
+        } else if (lowerType.includes("chaqueta gruesa")) {
+            type = "Chaqueta Gruesa";
+            price = 17000;
+        } else if (lowerType.includes("chaqueta sencilla")) {
+            type = "Chaqueta Sencilla";
+            price = 15000;
+        } else if (lowerType.includes("camisa")) {
+            type = "Camisa";
+            price = 10000;
+        } else if (lowerType.includes("pantal")) {
+            type = "Pantalón";
+            price = 10000;
+        } else if (lowerType.includes("blusa")) {
+            type = "Blusa";
+            price = 10000;
+        } else if (lowerType.includes("vestido")) {
+            type = "Vestido";
+            price = 20000;
+        } else if (lowerType.includes("cobija sencilla")) {
+            type = "Cobija Sencilla";
+            price = 29900;
+        } else if (lowerType.includes("cobija doble")) {
+            type = "Cobija Doble";
+            price = 49900;
+        } else if (lowerType.includes("cobija king")) {
+            type = "Cobija King";
+            price = 54900;
+        }
+        
+        items.push({
+            id: `parsed-${index}`,
+            quantity: quantity,
+            type: type,
+            price: price
+        });
+    });
+    
+    return items;
+}
+
+// Calcular la cantidad real de prendas físicas/bultos representadas por los ítems
+function calcularPrendasFisicasEsperadas(items) {
+    let total = 0;
+    if (!items || items.length === 0) return 0;
+    
+    items.forEach(item => {
+        const lowerType = item.type.toLowerCase();
+        let multiplier = 1;
+        
+        if (lowerType.includes("básico zapatos") || lowerType.includes("basico zapatos")) {
+            multiplier = 2; // 2 pares
+        } else if (lowerType.includes("pro zapatos")) {
+            multiplier = 3; // 3 pares
+        } else if (lowerType.includes("premium zapatos")) {
+            multiplier = 4; // 4 pares
+        }
+        
+        total += item.quantity * multiplier;
+    });
+    
+    return total;
+}
+
+
+// Expandir y normalizar ítems de la base de datos o resumen del chat
+function expandAndNormalizeItems(rawItems, chatServiceText) {
+    let itemsToProcess = [];
+    
+    // Si no hay items en la base de datos, usamos el texto de servicios del chat
+    if ((!rawItems || rawItems.length === 0) && chatServiceText) {
+        return parseItemsFromServiceText(chatServiceText);
+    }
+    
+    // Si hay items, los procesamos y expandimos si contienen "+" o "y"
+    (rawItems || []).forEach(item => {
+        const typeStr = item.type;
+        const lowerType = typeStr.toLowerCase();
+        
+        // Si el tipo es compuesto (ej. contiene "+" o "y" con planes), lo parseamos
+        if (typeStr.includes("+") || /\s+y\s+/i.test(typeStr) || (lowerType.includes("plan") && lowerType.includes("zapatos") && lowerType.includes("lavaseco"))) {
+            const parsed = parseItemsFromServiceText(typeStr);
+            if (parsed.length > 0) {
+                // Preservar precio o prorratear si es posible, o usar precios de lista
+                parsed.forEach(p => {
+                    itemsToProcess.push({
+                        id: item.id + "-" + p.id,
+                        quantity: p.quantity * item.quantity,
+                        type: p.type,
+                        price: p.price || 0
+                    });
+                });
+                return;
+            }
+        }
+        
+        // Si no es compuesto, lo normalizamos
+        let normalizedType = item.type;
+        let price = item.price || 0;
+        
+        if (lowerType.includes("plan básico lavaseco") || lowerType.includes("plan basico lavaseco")) {
+            normalizedType = "Plan Básico Lavaseco (1 Maleta)";
+            price = price || 119900;
+        } else if (lowerType.includes("plan pro lavaseco")) {
+            normalizedType = "Plan Pro Lavaseco (1 Maleta Grande)";
+            price = price || 219900;
+        } else if (lowerType.includes("plan básico zapatos") || lowerType.includes("plan basico zapatos")) {
+            normalizedType = "Plan Básico Zapatos (2 Pares)";
+            price = price || 54900;
+        } else if (lowerType.includes("plan pro zapatos")) {
+            normalizedType = "Plan Pro Zapatos (3 Pares)";
+            price = price || 77900;
+        } else if (lowerType.includes("plan premium zapatos")) {
+            normalizedType = "Plan Premium Zapatos (4 Pares)";
+            price = price || 99900;
+        }
+        
+        itemsToProcess.push({
+            id: item.id,
+            quantity: item.quantity,
+            type: normalizedType,
+            price: price
+        });
+    });
+    
+    return itemsToProcess;
 }
 
 
@@ -770,17 +1054,32 @@ function getMergedDeliveries() {
                         const isSimilar = histData.meta && esDireccionSimilar(o.clientAddress, histData.address);
                         const historicalMeta = isSimilar ? histData.meta : {};
                         
+                        // Overrides veraces basados en el resumen del chat
+                        const veracityName = meta.veracity_name || historicalMeta.veracity_name || null;
+                        const veracityAddress = meta.veracity_address || historicalMeta.veracity_address || null;
+                        const veracityPickupDate = meta.veracity_pickup_date || historicalMeta.veracity_pickup_date || null;
+                        const veracityTimeWindow = meta.veracity_time_window || historicalMeta.veracity_time_window || null;
+                        const veracityTotal = meta.veracity_total_value !== undefined && meta.veracity_total_value !== null ? meta.veracity_total_value : (historicalMeta.veracity_total_value || null);
+                        
+                        const finalClientName = veracityName || o.clientName;
+                        const finalOriginalAddress = veracityAddress || o.clientAddress;
+
                         // Convert unix epoch to YYYY-MM-DD in Colombia timezone
                         const dateStr = epochToColombiaDateString(o.created_at);
                         
                         // Heredar coordenadas, dirección resuelta e imágenes de fachada si están vacías en la orden actual
                         const finalLatitude = meta.latitude || historicalMeta.latitude || null;
                         const finalLongitude = meta.longitude || historicalMeta.longitude || null;
-                        const finalResolvedAddress = meta.resolved_address || historicalMeta.resolved_address || o.clientAddress;
+                        const finalResolvedAddress = meta.resolved_address || historicalMeta.resolved_address || finalOriginalAddress;
                         const finalResolvedLocalidad = meta.resolved_localidad || historicalMeta.resolved_localidad || detectarLocalidad(finalResolvedAddress, finalLatitude, finalLongitude);
                         const finalEvidencePhoto = meta.evidence_photo || historicalMeta.evidence_photo || null;
                         
-                        const expectedItems = meta.expected_items !== undefined ? meta.expected_items : (o.items_count || 1);
+                        // Normalizar y expandir ítems (tanto los de la BD como los extraídos del chat)
+                        const parsedChatRes = parseResumenFromChat(o.chatTranscription);
+                        const orderItems = expandAndNormalizeItems(itemsMap[o.id], parsedChatRes.serviceText);
+                        
+                        const calculatedExpectedUnits = calcularPrendasFisicasEsperadas(orderItems);
+                        const expectedItems = (meta.expected_items !== undefined && meta.expected_items !== null) ? meta.expected_items : (calculatedExpectedUnits || o.items_count || 1);
                         
                         // Extraer fecha y hora por IA parsing del chat si no están estructuradas
                         let parsedDate = null;
@@ -791,8 +1090,12 @@ function getMergedDeliveries() {
                             parsedTimeWindow = parsed.timeWindow;
                         }
 
-                        const finalOrderDate = sanitizeDateString(meta.delivery_date || o.scheduledDate || parsedDate || dateStr);
-                        const finalTimeWindow = meta.time_window || parsedTimeWindow || "10:00 - 12:00";
+                        const isGrupoB = ["Kennedy", "Engativá", "Fontibón", "Puente Aranda", "Bosa", "Usme", "Ciudad Bolívar", "San Cristóbal", "Rafael Uribe", "Antonio Nariño", "Tunjuelito"].some(loc => finalResolvedLocalidad && finalResolvedLocalidad.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(loc.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()));
+                        const defaultFallbackWindow = isGrupoB ? "12:00 - 15:00" : "11:00 - 14:00";
+
+                        const finalOrderDate = sanitizeDateString(veracityPickupDate || meta.delivery_date || o.scheduledDate || parsedDate || dateStr);
+                        const finalTimeWindow = veracityTimeWindow || meta.time_window || parsedTimeWindow || defaultFallbackWindow;
+                        const finalAmount = veracityTotal !== null ? veracityTotal : o.totalValue;
 
                         // 1. Agregar la recogida principal
                         merged.push({
@@ -800,18 +1103,18 @@ function getMergedDeliveries() {
                             order_id: o.id,
                             chatbot_order_id: o.id,
                             ticket_number: o.ticketNumber,
-                            client_name: o.clientName,
+                            client_name: finalClientName,
                             client_phone: phoneKey,
                             address: finalResolvedAddress,
-                            raw_address: o.clientAddress,
+                            raw_address: finalOriginalAddress,
                             localidad: finalResolvedLocalidad,
                             time_window: finalTimeWindow,
-                            amount: o.totalValue,
+                            amount: finalAmount,
                             pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
                             status: o.status || 'PENDIENTE',
                             qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
                             expected_items: expectedItems,
-                            collected_items: meta.collected_items !== undefined ? meta.collected_items : expectedItems,
+                            collected_items: (meta.collected_items !== undefined && meta.collected_items !== null) ? meta.collected_items : expectedItems,
                             evidence_photo: finalEvidencePhoto,
                             signature_drawn: meta.signature_drawn === 1,
                             order_date: finalOrderDate,
@@ -819,7 +1122,7 @@ function getMergedDeliveries() {
                             latitude: finalLatitude,
                             longitude: finalLongitude,
                             chat_transcription: o.chatTranscription || null,
-                            items: itemsMap[o.id] || [],
+                            items: orderItems,
                             items_comments: meta.items_comments || null,
                             delivery_type: meta.delivery_type || "RECOGIDA",
                             return_delivery_date: meta.return_delivery_date || null,
@@ -833,18 +1136,18 @@ function getMergedDeliveries() {
                                 order_id: o.id,
                                 chatbot_order_id: o.id,
                                 ticket_number: o.ticketNumber,
-                                client_name: o.clientName,
+                                client_name: finalClientName,
                                 client_phone: phoneKey,
                                 address: finalResolvedAddress,
-                                raw_address: o.clientAddress,
+                                raw_address: finalOriginalAddress,
                                 localidad: finalResolvedLocalidad,
                                 time_window: meta.return_time_window || "12:00 - 15:00",
                                 amount: 0,
                                 pay_method: o.paymentStatus === 'PAGADO' ? 'Pagado (Online)' : 'Efectivo',
                                 status: meta.return_status || "PENDIENTE",
                                 qr_code: `QR-ORQUIDEAS-${o.ticketNumber || Math.floor(1000 + Math.random() * 9000)}`,
-                                expected_items: expectedItems,
-                                collected_items: expectedItems,
+                                expected_items: (meta.collected_items !== undefined && meta.collected_items !== null) ? meta.collected_items : expectedItems,
+                                collected_items: (meta.collected_items !== undefined && meta.collected_items !== null) ? meta.collected_items : expectedItems,
                                 evidence_photo: meta.return_evidence_photo || null,
                                 signature_drawn: meta.return_signature_drawn === 1,
                                 order_date: meta.return_delivery_date,
@@ -852,7 +1155,7 @@ function getMergedDeliveries() {
                                 latitude: finalLatitude,
                                 longitude: finalLongitude,
                                 chat_transcription: o.chatTranscription || null,
-                                items: itemsMap[o.id] || [],
+                                items: orderItems,
                                 items_comments: meta.return_items_comments || null,
                                 delivery_type: "ENTREGA",
                                 return_delivery_date: meta.return_delivery_date,
@@ -901,7 +1204,7 @@ function getMergedDeliveries() {
                             address: "Carrera 15 # 88 - 21, Bogotá",
                             raw_address: "Carrera 15 # 88 - 21",
                             localidad: "Chapinero",
-                            time_window: "10:00 - 12:00",
+                            time_window: "11:00 - 14:00",
                             amount: 65000,
                             pay_method: "Pagado (Online)",
                             status: "PENDIENTE",
@@ -914,7 +1217,7 @@ function getMergedDeliveries() {
                             sync_pending: false,
                             latitude: 4.6732,
                             longitude: -74.0531,
-                            chat_transcription: "[Chat con Diego García]\nCliente: Hola, quiero mandar a lavar unas cosas.\nChatbot: Claro, ¿qué prendas?\nCliente: 1 gabardina y 1 vestido.\nChatbot: Perfecto, programado para mañana en Carrera 15 # 88 - 21 de 10:00 a 12:00.",
+                            chat_transcription: "[Chat con Diego García]\nCliente: Hola, quiero mandar a lavar unas cosas.\nChatbot: Claro, ¿qué prendas?\nCliente: 1 gabardina y 1 vestido.\nChatbot: Perfecto, programado para mañana en Carrera 15 # 88 - 21 de 11:00 AM a 2:00 PM.",
                             items: [
                                 { type: "Gabardina", quantity: 1, price: 35000 },
                                 { type: "Vestido", quantity: 1, price: 30000 }
@@ -929,7 +1232,7 @@ function getMergedDeliveries() {
                             address: "Carrera 15 # 88 - 21, Bogotá",
                             raw_address: "Carrera 15 # 88 - 21",
                             localidad: "Chapinero",
-                            time_window: "10:00 - 12:00",
+                            time_window: "11:00 - 14:00",
                             amount: 45000,
                             pay_method: "Pagado (Online)",
                             status: "PENDIENTE",
@@ -1045,11 +1348,8 @@ app.post('/api/webhook/order', async (req, res) => {
     }
 
     const localidad = detectarLocalidad(address, latitude, longitude);
-    const prendasEsperadas = parseInt(expected_items) || 1;
     const nowEpoch = Math.floor(Date.now() / 1000);
-    const payStatus = pay_method === 'Pagado (Online)' || pay_method === 'PAGADO' ? 'PAGADO' : 'PENDIENTE';
-    const paidAmt = payStatus === 'PAGADO' ? parseFloat(amount) || 0 : 0;
-
+    
     // Extraer fecha y hora por IA parsing del chat si no están estructuradas
     let parsedDate = null;
     let parsedTimeWindow = null;
@@ -1059,8 +1359,27 @@ app.post('/api/webhook/order', async (req, res) => {
         parsedTimeWindow = parsed.timeWindow;
     }
 
+    const isGrupoB = ["Kennedy", "Engativá", "Fontibón", "Puente Aranda", "Bosa", "Usme", "Ciudad Bolívar", "San Cristóbal", "Rafael Uribe", "Antonio Nariño", "Tunjuelito"].some(loc => localidad && localidad.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(loc.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()));
+    const defaultFallbackWindow = isGrupoB ? "12:00 - 15:00" : "11:00 - 14:00";
+
     const finalDeliveryDate = delivery_date || parsedDate || getColombiaDateString();
-    const finalTimeWindow = time_window || parsedTimeWindow || "10:00 - 12:00";
+    const finalTimeWindow = time_window || parsedTimeWindow || defaultFallbackWindow;
+
+    // Calcular prendas esperadas físicas basadas en los planes y servicios descritos en el chat
+    let prendasEsperadas = parseInt(expected_items) || 1;
+    if (chatTranscriptionInput) {
+        const parsedChatRes = parseResumenFromChat(chatTranscriptionInput);
+        if (parsedChatRes.serviceText) {
+            const parsedItems = parseItemsFromServiceText(parsedChatRes.serviceText);
+            const calculatedUnits = calcularPrendasFisicasEsperadas(parsedItems);
+            if (calculatedUnits > 0) {
+                prendasEsperadas = calculatedUnits;
+            }
+        }
+    }
+
+    const payStatus = pay_method === 'Pagado (Online)' || pay_method === 'PAGADO' ? 'PAGADO' : 'PENDIENTE';
+    const paidAmt = payStatus === 'PAGADO' ? parseFloat(amount) || 0 : 0;
 
     // Calcular fecha y franja de retorno automáticamente si no están definidas
     let finalReturnDate = return_delivery_date || null;
@@ -1167,7 +1486,7 @@ app.post('/api/webhook/order', async (req, res) => {
                         client_phone: client_phone.replace(/\D/g, ''),
                         delivery_address: address,
                         localidad,
-                        time_window: time_window || "10:00 - 12:00",
+                        time_window: finalTimeWindow,
                         amount: parseFloat(amount) || 0.00,
                         pay_method: pay_method || 'Efectivo',
                         status: 'PENDIENTE',
@@ -1227,11 +1546,10 @@ app.get('/api/deliveries/capacity', (req, res) => {
     const limitPerSlot = parseInt(req.query.limit) || 5; // Limite por franja (por defecto 5 cupos)
     
     const slots = [
-        "08:00 - 10:00",
-        "10:00 - 12:00",
-        "12:00 - 14:00",
-        "14:00 - 16:00",
-        "16:00 - 18:00"
+        "08:00 - 11:00",
+        "09:00 - 12:00",
+        "11:00 - 14:00",
+        "12:00 - 15:00"
     ];
     
     appDb.all(`
@@ -1358,7 +1676,14 @@ app.post('/api/deliveries/sync', async (req, res) => {
                         WHERE excluded.updated_at >= delivery_metadata.updated_at OR delivery_metadata.updated_at IS NULL
                     `, [
                         clientD.id,
-                        clientD.time_window || "10:00 - 12:00",
+                        clientD.time_window || (function() {
+                            let calculatedFallbackWindow = "11:00 - 14:00";
+                            if (clientD.localidad) {
+                                const isB = ["Kennedy", "Engativá", "Fontibón", "Puente Aranda", "Bosa", "Usme", "Ciudad Bolívar", "San Cristóbal", "Rafael Uribe", "Antonio Nariño", "Tunjuelito"].some(loc => clientD.localidad.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(loc.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()));
+                                calculatedFallbackWindow = isB ? "12:00 - 15:00" : "11:00 - 14:00";
+                            }
+                            return calculatedFallbackWindow;
+                        })(),
                         clientD.expected_items || 1,
                         clientD.collected_items || 1,
                         clientD.evidence_photo || null,
@@ -1736,20 +2061,43 @@ function startBackgroundGeocoding() {
                 const proceedWithNormalGeocoding = (orderToGeocode) => {
                     const address = orderToGeocode.clientAddress;
                     
+                    const parsedChatRes = parseResumenFromChat(orderToGeocode.chatTranscription);
+                    const veracityName = parsedChatRes.clientName || null;
+                    const veracityAddress = parsedChatRes.clientAddress || null;
+                    const veracityTotal = parsedChatRes.totalText ? parseFloat(parsedChatRes.totalText.replace(/[^\d]/g, '')) : null;
+                    
+                    const parsedChat = extraerFechaYHoraDelChat(orderToGeocode.chatTranscription, orderToGeocode.created_at);
+                    const veracityPickupDate = parsedChat.date || null;
+                    const veracityTimeWindow = parsedChat.timeWindow || null;
+                    
                     if (!address || address === 'Recogida WhatsApp') {
                         const nowEpoch = Math.floor(Date.now() / 1000);
                         const baseLat = 4.7011;
                         const baseLng = -74.0330;
+                        const defaultAddress = veracityAddress || 'Recogida WhatsApp';
+                        const defaultLocalidad = detectarLocalidadExplicita(defaultAddress) || 'Usaquén';
                         
                         appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [orderToGeocode.id], (err, meta) => {
                             if (err) return;
                             if (meta) {
-                                appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', nowEpoch, orderToGeocode.id]);
+                                appDb.run(`
+                                    UPDATE delivery_metadata 
+                                    SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ?,
+                                        veracity_name = ?, veracity_address = ?, veracity_pickup_date = ?, veracity_time_window = ?, veracity_total_value = ?
+                                    WHERE order_id = ?
+                                `, [baseLat, baseLng, defaultAddress, defaultLocalidad, nowEpoch, 
+                                    veracityName, veracityAddress, veracityPickupDate, veracityTimeWindow, veracityTotal, 
+                                    orderToGeocode.id]);
                             } else {
-                                const parsedChat = extraerFechaYHoraDelChat(orderToGeocode.chatTranscription, orderToGeocode.created_at);
                                 const finalDate = sanitizeDateString(orderToGeocode.scheduledDate || parsedChat.date || getColombiaDateString());
-                                const returnSched = calcularFechaRetornoProgramada(finalDate, 'Usaquén', orderToGeocode.chatTranscription);
-                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, baseLat, baseLng, 'Recogida WhatsApp', 'Usaquén', finalDate, nowEpoch, returnSched.date, returnSched.timeWindow]);
+                                const returnSched = calcularFechaRetornoProgramada(finalDate, defaultLocalidad, orderToGeocode.chatTranscription);
+                                appDb.run(`
+                                    INSERT INTO delivery_metadata (
+                                        order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window,
+                                        veracity_name, veracity_address, veracity_pickup_date, veracity_time_window, veracity_total_value
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                `, [orderToGeocode.id, baseLat, baseLng, defaultAddress, defaultLocalidad, finalDate, nowEpoch, returnSched.date, returnSched.timeWindow,
+                                    veracityName, veracityAddress, veracityPickupDate, veracityTimeWindow, veracityTotal]);
                             }
                         });
                         return;
@@ -1780,20 +2128,32 @@ function startBackgroundGeocoding() {
                         
                         reverseGeocode(lat, lon).then(result => {
                             const nowEpoch = Math.floor(Date.now() / 1000);
-                            const resolvedAddress = result ? result.display_name : `Ubicación GPS: ${lat}, ${lon}`;
-                            const resolvedLocalidad = result && result.localidad ? result.localidad : detectarLocalidad(address, lat, lon);
+                            const resolvedAddress = veracityAddress || (result ? result.display_name : `Ubicación GPS: ${lat}, ${lon}`);
+                            const resolvedLocalidad = detectarLocalidadExplicita(resolvedAddress) || (result && result.localidad ? result.localidad : detectarLocalidad(address, lat, lon));
                             
                             console.log(`✅ [Geocoder] Ubicación GPS resuelta: "${resolvedAddress}" [${resolvedLocalidad}]`);
                             
                             appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [orderToGeocode.id], (err, meta) => {
                                 if (err) return;
                                 if (meta) {
-                                    appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [lat, lon, resolvedAddress, resolvedLocalidad, nowEpoch, orderToGeocode.id]);
+                                    appDb.run(`
+                                        UPDATE delivery_metadata 
+                                        SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ?,
+                                            veracity_name = ?, veracity_address = ?, veracity_pickup_date = ?, veracity_time_window = ?, veracity_total_value = ?
+                                        WHERE order_id = ?
+                                    `, [lat, lon, resolvedAddress, resolvedLocalidad, nowEpoch, 
+                                        veracityName, veracityAddress, veracityPickupDate, veracityTimeWindow, veracityTotal, 
+                                        orderToGeocode.id]);
                                 } else {
-                                    const parsedChat = extraerFechaYHoraDelChat(orderToGeocode.chatTranscription, orderToGeocode.created_at);
                                     const finalDate = sanitizeDateString(orderToGeocode.scheduledDate || parsedChat.date || getColombiaDateString());
                                     const returnSched = calcularFechaRetornoProgramada(finalDate, resolvedLocalidad, orderToGeocode.chatTranscription);
-                                    appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, lat, lon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch, returnSched.date, returnSched.timeWindow]);
+                                    appDb.run(`
+                                        INSERT INTO delivery_metadata (
+                                            order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window,
+                                            veracity_name, veracity_address, veracity_pickup_date, veracity_time_window, veracity_total_value
+                                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    `, [orderToGeocode.id, lat, lon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch, returnSched.date, returnSched.timeWindow,
+                                        veracityName, veracityAddress, veracityPickupDate, veracityTimeWindow, veracityTotal]);
                                 }
                             });
                         });
@@ -1801,22 +2161,23 @@ function startBackgroundGeocoding() {
                     }
 
                     // 4. Dirección normal de texto
-                    console.log(`📡 [Geocoder] Intentando geolocalizar dirección de texto: "${address}" para orden ${orderToGeocode.id}...`);
-                    geocodeAddress(address).then(coords => {
+                    const addressToGeocode = veracityAddress || address;
+                    console.log(`📡 [Geocoder] Intentando geolocalizar dirección de texto: "${addressToGeocode}" para orden ${orderToGeocode.id}...`);
+                    geocodeAddress(addressToGeocode).then(coords => {
                         const nowEpoch = Math.floor(Date.now() / 1000);
                         let finalLat = coords ? coords.lat : null;
                         let finalLon = coords ? coords.lon : null;
-                        let resolvedAddress = coords ? coords.display_name : address;
-                        let resolvedLocalidad = detectarLocalidadExplicita(address) || (coords ? coords.localidad : null);
+                        let resolvedAddress = addressToGeocode;
+                        let resolvedLocalidad = detectarLocalidadExplicita(addressToGeocode) || (coords ? coords.localidad : null);
                         
                         if (!finalLat || !finalLon) {
                             if (!resolvedLocalidad) {
-                                resolvedLocalidad = detectarLocalidad(address);
+                                resolvedLocalidad = detectarLocalidad(addressToGeocode);
                             }
                             const fallback = getLocalidadCenterCoords(resolvedLocalidad);
                             finalLat = fallback.lat;
                             finalLon = fallback.lon;
-                            console.log(`⚠️ [Geocoder] No se pudo encontrar coordenadas para "${address}". Asignando centro de ${resolvedLocalidad}: (${finalLat}, ${finalLon})`);
+                            console.log(`⚠️ [Geocoder] No se pudo encontrar coordenadas para "${addressToGeocode}". Asignando centro de ${resolvedLocalidad}: (${finalLat}, ${finalLon})`);
                         } else {
                             if (!resolvedLocalidad) {
                                 resolvedLocalidad = detectarLocalidad(resolvedAddress, finalLat, finalLon);
@@ -1828,15 +2189,27 @@ function startBackgroundGeocoding() {
                         appDb.get(`SELECT * FROM delivery_metadata WHERE order_id = ?`, [orderToGeocode.id], (err, meta) => {
                             if (err) return;
                             if (meta) {
-                                appDb.run(`UPDATE delivery_metadata SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ? WHERE order_id = ?`, [finalLat, finalLon, resolvedAddress, resolvedLocalidad, nowEpoch, orderToGeocode.id], (err) => {
-                                    if (err) console.error("❌ [Geocoder] Error al actualizar coordenadas:", err.message);
+                                appDb.run(`
+                                    UPDATE delivery_metadata 
+                                    SET latitude = ?, longitude = ?, resolved_address = ?, resolved_localidad = ?, updated_at = ?,
+                                        veracity_name = ?, veracity_address = ?, veracity_pickup_date = ?, veracity_time_window = ?, veracity_total_value = ?
+                                    WHERE order_id = ?
+                                `, [finalLat, finalLon, resolvedAddress, resolvedLocalidad, nowEpoch, 
+                                    veracityName, veracityAddress, veracityPickupDate, veracityTimeWindow, veracityTotal, 
+                                    orderToGeocode.id], (err) => {
+                                    if (err) console.error("❌ [Geocoder] Error al actualizar coordenadas/veracidad:", err.message);
                                 });
                             } else {
-                                const parsedChat = extraerFechaYHoraDelChat(orderToGeocode.chatTranscription, orderToGeocode.created_at);
                                 const finalDate = sanitizeDateString(orderToGeocode.scheduledDate || parsedChat.date || getColombiaDateString());
                                 const returnSched = calcularFechaRetornoProgramada(finalDate, resolvedLocalidad, orderToGeocode.chatTranscription);
-                                appDb.run(`INSERT INTO delivery_metadata (order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [orderToGeocode.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch, returnSched.date, returnSched.timeWindow], (err) => {
-                                    if (err) console.error("❌ [Geocoder] Error al insertar coordenadas:", err.message);
+                                appDb.run(`
+                                    INSERT INTO delivery_metadata (
+                                        order_id, latitude, longitude, resolved_address, resolved_localidad, delivery_date, updated_at, return_delivery_date, return_time_window,
+                                        veracity_name, veracity_address, veracity_pickup_date, veracity_time_window, veracity_total_value
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                `, [orderToGeocode.id, finalLat, finalLon, resolvedAddress, resolvedLocalidad, finalDate, nowEpoch, returnSched.date, returnSched.timeWindow,
+                                    veracityName, veracityAddress, veracityPickupDate, veracityTimeWindow, veracityTotal], (err) => {
+                                    if (err) console.error("❌ [Geocoder] Error al insertar coordenadas/veracidad:", err.message);
                                 });
                             }
                         });
@@ -1869,7 +2242,15 @@ function startBackgroundGeocoding() {
                         `, similarIds, (err, historicalMeta) => {
                             if (!err && historicalMeta) {
                                 const nowEpoch = Math.floor(Date.now() / 1000);
+                                const parsedChatRes = parseResumenFromChat(order.chatTranscription);
+                                const veracityName = parsedChatRes.clientName || null;
+                                const veracityAddress = parsedChatRes.clientAddress || null;
+                                const veracityTotal = parsedChatRes.totalText ? parseFloat(parsedChatRes.totalText.replace(/[^\d]/g, '')) : null;
+                                
                                 const parsedChat = extraerFechaYHoraDelChat(order.chatTranscription, order.created_at);
+                                const veracityPickupDate = parsedChat.date || null;
+                                const veracityTimeWindow = parsedChat.timeWindow || null;
+                                
                                 const finalDate = sanitizeDateString(order.scheduledDate || parsedChat.date || getColombiaDateString());
                                 const explicitLocalidad = detectarLocalidadExplicita(order.clientAddress);
                                 const finalLocalidad = explicitLocalidad || historicalMeta.resolved_localidad || "Usaquén";
@@ -1878,19 +2259,21 @@ function startBackgroundGeocoding() {
                                 appDb.run(`
                                     INSERT INTO delivery_metadata (
                                         order_id, latitude, longitude, resolved_address, resolved_localidad, 
-                                        evidence_photo, delivery_date, updated_at, return_delivery_date, return_time_window
-                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        evidence_photo, delivery_date, updated_at, return_delivery_date, return_time_window,
+                                        veracity_name, veracity_address, veracity_pickup_date, veracity_time_window, veracity_total_value
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 `, [
                                     order.id, 
                                     historicalMeta.latitude, 
                                     historicalMeta.longitude, 
-                                    historicalMeta.resolved_address, 
+                                    veracityAddress || historicalMeta.resolved_address, 
                                     finalLocalidad, 
                                     historicalMeta.evidence_photo, 
                                     finalDate, 
                                     nowEpoch,
                                     historicalMeta.return_delivery_date || returnSched.date,
-                                    historicalMeta.return_time_window || returnSched.timeWindow
+                                    historicalMeta.return_time_window || returnSched.timeWindow,
+                                    veracityName, veracityAddress, veracityPickupDate, veracityTimeWindow, veracityTotal
                                 ], (err) => {
                                     if (err) {
                                         console.error("❌ [Geocoder] Error al insertar coordenadas históricas:", err.message);
